@@ -9,7 +9,6 @@ Pipeline de dados de cotações de CEASA (bronze/silver/gold no BigQuery).
 
 | Item | Valor |
 |---|---|
-| Repositório local | `/home/dos-anjos/Dropbox/PDM/PDM-2026-CEASA` |
 | Branch de trabalho | `dosAnjos` |
 | Projeto GCP | `pdm-ceasa` |
 | Bucket | `gs://pdm-ceasa-dados` |

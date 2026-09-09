@@ -43,6 +43,39 @@ Pipeline de dados de cotações de CEASA (bronze/silver/gold no BigQuery).
 - Lacuna declarada é resposta válida; inferência apresentada como verificação, não.
 - Todo relatório de entrega começa com um marcador explícito de início, separado do log de operações, para não se confundir com a saída dos comandos.
 
+## Estrutura de `sql/`
+
+Organização por função e camada, definida no Bloco 13:
+
+```
+sql/
+  construir_tabelas/     cria e substitui tabelas no BigQuery
+    bronze/
+    silver/
+    gold/
+  modelo/                treino e avaliação de modelos
+    bronze/
+    silver/
+    gold/
+  consultas/              conferência e exploração
+    bronze/
+    silver/
+    gold/
+ingestao/
+  upload_historico.sh    permanece na raiz do repositório (upload para o GCS, não BigQuery)
+```
+
+Dentro de cada pasta, arquivos numerados a partir de `01_` na ordem de
+execução, com nome descritivo depois do número.
+
+- **Não criar pasta nem arquivo fora dessa estrutura.** Arquivo novo vai na
+  pasta correspondente à sua função (`construir_tabelas`, `modelo` ou
+  `consultas`) e camada (`bronze`, `silver` ou `gold`).
+- Verificar a estrutura existente antes de criar qualquer coisa. Se nenhuma
+  pasta servir, **parar e perguntar** em vez de inventar caminho novo.
+- Um `.txt` vazio marca pasta ainda sem conteúdo (só para o Git versionar a
+  pasta) e deve ser removido assim que a pasta receber um arquivo real.
+
 ## Git
 
 - Trabalho na branch `dosAnjos`.

@@ -12,7 +12,7 @@ da ingestão e o que foi deliberadamente deixado de fora.
   repositório).
 - Sobe para `gs://pdm-ceasa-dados/raw/cotacoes_historico.csv` via
   `gcloud storage cp`, upload idempotente (mesmo objeto, sobrescreve).
-- `sql/01_bronze.sql` lê o bucket inteiro por wildcard:
+- `sql/construir_tabelas/bronze/01_bronze.sql` lê o bucket inteiro por wildcard:
   `uris = ['gs://pdm-ceasa-dados/raw/*.csv']` — qualquer arquivo novo colocado
   nesse prefixo entra na próxima carga sem editar o script.
 - Carga: `LOAD DATA OVERWRITE` — reconstrói a tabela inteira a cada execução

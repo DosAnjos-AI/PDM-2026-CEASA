@@ -1,7 +1,8 @@
 # `modelo_serie_arima` — `pdm-ceasa.baseline.modelo_serie_arima`
 
-Script: `sql/93_baseline_treino_arima.sql` (treino), `sql/94_baseline_avaliacao.sql`
-(marca a métrica como não aplicável). Retreinado no Bloco 11 (versão do
+Script: `sql/modelo/bronze/04_baseline_treino_arima.sql` (treino),
+`sql/modelo/bronze/05_baseline_avaliacao.sql` (marca a métrica como não
+aplicável). Retreinado no Bloco 11 (versão do
 Bloco 10 tinha split; esta versão não tem — ver seção Split).
 
 ## Objetivo

@@ -1,7 +1,8 @@
 # `modelo_regressao_arvore` — `pdm-ceasa.baseline.modelo_regressao_arvore`
 
-Script: `sql/92_baseline_treino_arvore.sql` (treino), `sql/90_baseline_dados_treino.sql`
-(tabela de origem), `sql/94_baseline_avaliacao.sql` (avaliação).
+Script: `sql/modelo/bronze/03_baseline_treino_arvore.sql` (treino),
+`sql/modelo/bronze/01_baseline_dados_treino.sql` (tabela de origem),
+`sql/modelo/bronze/05_baseline_avaliacao.sql` (avaliação).
 
 ## Objetivo
 

@@ -1,7 +1,8 @@
 # `modelo_regressao_linear` — `pdm-ceasa.baseline.modelo_regressao_linear`
 
-Script: `sql/91_baseline_treino_linear.sql` (treino), `sql/90_baseline_dados_treino.sql`
-(tabela de origem), `sql/94_baseline_avaliacao.sql` (avaliação).
+Script: `sql/modelo/bronze/02_baseline_treino_linear.sql` (treino),
+`sql/modelo/bronze/01_baseline_dados_treino.sql` (tabela de origem),
+`sql/modelo/bronze/05_baseline_avaliacao.sql` (avaliação).
 
 ## Objetivo
 

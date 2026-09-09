@@ -76,6 +76,25 @@ execução, com nome descritivo depois do número.
 - Um `.txt` vazio marca pasta ainda sem conteúdo (só para o Git versionar a
   pasta) e deve ser removido assim que a pasta receber um arquivo real.
 
+### Scripts de treino não se reexecutam por rotina
+
+Regra registrada no Bloco 14, depois de um retreino desnecessário durante
+uma reorganização de pastas ter custado tempo e crédito e invalidado
+métricas já documentadas.
+
+- Scripts em `sql/modelo/` executam `CREATE OR REPLACE MODEL` e
+  **retreinam** ao rodar. Não são reexecutados só para validar movimentação,
+  refatoração ou mudança de caminho.
+- Para verificar que um script de treino continua válido sem treinar, usar
+  `bq query --dry_run --use_legacy_sql=false < caminho.sql` — valida sintaxe
+  e referências, não executa e não cobra.
+- Retreino acontece quando há intenção explícita de retreinar: mudança no
+  desenho do modelo, nos dados de entrada ou nos hiperparâmetros.
+- `LINEAR_REG` tem inicialização estocástica: reexecutar o mesmo script sem
+  mudar nada não reproduz a métrica exata. Comparação de métrica entre
+  execuções só é válida como evidência de mudança de desenho; variação sem
+  mudança de desenho é ruído do próprio treino, não regressão do modelo.
+
 ## Git
 
 - Trabalho na branch `dosAnjos`.

@@ -81,22 +81,40 @@ OPTIONS (
 ## Métricas
 
 Obtidas via `ML.EVALUATE` na partição de teste (`data >= 2026-01-01`), sem
-maquiagem:
+maquiagem. Valores vigentes, lidos de `pdm-ceasa.baseline.metricas` em
+2026-09-09 (Bloco 14):
 
-| Métrica | Valor |
+| Métrica | Valor vigente |
 |---|---|
-| `mean_absolute_error` | 2694,84 |
-| `mean_squared_error` | 7,297 × 10⁸ |
-| `r2_score` | **-180271,21** |
-| `explained_variance` | -178485,74 |
+| `mean_absolute_error` | 7828,49 |
+| `mean_squared_error` | 6,216 × 10⁹ |
+| `r2_score` | **-1535674,71** |
+| `explained_variance` | -1520559,82 |
+
+**Histórico de variação (não é mudança de desenho):** o Bloco 10 mediu
+`r2_score = -180271,21`. O modelo foi reexecutado sem alteração de código,
+dado ou hiperparâmetro durante a reorganização de pastas do Bloco 13 (retreino
+que o Bloco 14 identificou como desnecessário e passou a proibir por
+rotina — ver `CLAUDE.md`), e o novo treino produziu `r2_score = -1535674,71`.
+`LINEAR_REG` do BQML tem inicialização estocástica: mesma entrada, mesmo
+`CREATE OR REPLACE MODEL`, resultado numérico diferente a cada treino. O
+padrão qualitativo se mantém nas duas medições — R² catastroficamente
+negativo, sinal de overfitting — só a magnitude varia.
 
 ## Previsão de exemplo
 
-Entrada: `produto = "FRANBOESA"`, `classe = 1`, `mes = 1`, `dia_semana = 2`
-(linha da partição de teste, data real `2026-01-05`).
+Entrada: `produto = "KIWI CHILENO"`, `classe = 1`, `mes = 1`,
+`dia_semana = 2` (linha de `dados_treino` com `data = 2026-01-05`; consulta
+sem `ORDER BY` — a linha retornada por `LIMIT 1` não é garantida estável
+entre execuções, e de fato mudou em relação ao exemplo anterior,
+`produto = "FRANBOESA"`).
 
-Saída: `preco_previsto = 367,63`.
-Valor real (`preco_comum` do alvo nessa linha): `240,00`.
+Saída (modelo vigente): `preco_previsto = 196,49`.
+Valor real (`preco_comum` do alvo nessa linha): `230,00`.
+
+Exemplo anterior (Bloco 10, modelo já substituído): `FRANBOESA`, classe 1,
+`preco_previsto = 367,63`, real `240,00` — mantido aqui só como referência
+histórica, não é mais reproduzível com o modelo atual.
 
 ## Limitações
 

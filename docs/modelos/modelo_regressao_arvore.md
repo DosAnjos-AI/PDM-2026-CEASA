@@ -75,23 +75,37 @@ OPTIONS (
 ## Métricas
 
 Obtidas via `ML.EVALUATE` na mesma partição de teste do modelo linear
-(`data >= 2026-01-01`), sem maquiagem:
+(`data >= 2026-01-01`), sem maquiagem. Valores vigentes, lidos de
+`pdm-ceasa.baseline.metricas` em 2026-09-09 (Bloco 14):
 
-| Métrica | Valor |
+| Métrica | Valor vigente |
 |---|---|
 | `mean_absolute_error` | 38,29 |
 | `mean_squared_error` | 2731,13 |
 | `r2_score` | 0,3253 |
 | `explained_variance` | 0,4114 |
 
+**Histórico de variação:** o modelo foi reexecutado sem alteração de
+código, dado ou hiperparâmetro durante a reorganização de pastas do
+Bloco 13. Ao contrário do modelo linear, `BOOSTED_TREE_REGRESSOR` não
+mostrou variação perceptível nesses 4 algarismos entre o treino do Bloco 10
+e o retreino do Bloco 13 (diferença só na 10ª casa decimal e além,
+irrelevante). Valores acima idênticos aos documentados originalmente.
+
 ## Previsão de exemplo
 
 Mesma linha de entrada usada no modelo linear, para comparação direta:
-`produto = "FRANBOESA"`, `classe = 1`, `mes = 1`, `dia_semana = 2` (data real
-`2026-01-05`).
+`produto = "KIWI CHILENO"`, `classe = 1`, `mes = 1`, `dia_semana = 2` (linha
+de `dados_treino` com `data = 2026-01-05`; consulta sem `ORDER BY`, `LIMIT 1`
+não garante a mesma linha entre execuções — no exemplo do Bloco 10 essa
+mesma consulta trouxe `FRANBOESA`).
 
-Saída: `preco_previsto = 116,77`.
-Valor real (`preco_comum` do alvo nessa linha): `240,00`.
+Saída (modelo vigente): `preco_previsto = 108,78`.
+Valor real (`preco_comum` do alvo nessa linha): `230,00`.
+
+Exemplo anterior (Bloco 10, modelo já substituído): `FRANBOESA`, classe 1,
+`preco_previsto = 116,77`, real `240,00` — mantido aqui só como referência
+histórica.
 
 ## Limitações
 

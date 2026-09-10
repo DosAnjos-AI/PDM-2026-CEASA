@@ -3,3 +3,7 @@
 *.pem
 *.key
 credentials*.json
+
+# saida dos scripts de coleta (ingestao/ceasa_*.py)
+cotacoes/
+__pycache__/

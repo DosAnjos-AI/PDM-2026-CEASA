@@ -573,6 +573,9 @@ def main() -> int:
     p.add_argument("--ocr", action="store_true",
                    help="usa OCR nos PDFs sem camada de texto (exige tesseract)")
     p.add_argument("--dpi", type=int, default=300, help="resolucao do OCR (padrao: 300)")
+    p.add_argument("--falhas-esperadas", type=int, default=0, metavar="N",
+                   help="quantas falhas ja conhecidas nao devem marcar a execucao "
+                        "como erro (padrao: 0)")
     args = p.parse_args()
 
     if not shutil.which("pdftotext"):
@@ -733,7 +736,15 @@ def main() -> int:
         print(f"Linhas com minimo<=comum<=maximo violado: {len(fora)} "
               f"({100 * len(fora) / len(todas):.2f}%)")
 
-    return 0 if not falhas else 2
+    # Codigo de saida pensado para execucao automatizada: ha falhas permanentes
+    # e conhecidas (os 2 boletins semanais, que nao sao cotacao diaria). Marcar
+    # erro por causa delas faria toda execucao agendada falhar, e o alerta
+    # viraria ruido. Falha alem da conta esperada, ai sim, aborta ruidosamente.
+    if len(falhas) > args.falhas_esperadas:
+        print(f"\n{len(falhas)} falha(s) para {args.falhas_esperadas} esperada(s).",
+              file=sys.stderr)
+        return 2
+    return 0
 
 
 if __name__ == "__main__":

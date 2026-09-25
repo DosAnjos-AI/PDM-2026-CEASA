@@ -28,7 +28,7 @@ WITH serie AS (
     STRUCT(data AS data, preco_comum AS preco_comum, grupo AS grupo, ano AS ano, mes AS mes)
     ORDER BY data
   ) AS pregoes
-  FROM `pdm-ceasa.silver.cotacoes`
+  FROM `silver.cotacoes`
   WHERE produto = p_produto AND classe = p_classe
 ),
 ancora AS (
@@ -83,7 +83,7 @@ SELECT
   END AS observacao
 FROM vetor AS v
 LEFT JOIN ML.PREDICT(
-  MODEL `pdm-ceasa.silver.modelo_regressao_arvore`,
+  MODEL `silver.modelo_regressao_arvore`,
   (
     SELECT
       p_produto AS produto, p_classe AS classe, v.grupo AS grupo, v.ano AS ano, v.mes AS mes, v.dia_semana AS dia_semana,

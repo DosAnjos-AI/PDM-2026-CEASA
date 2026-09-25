@@ -35,7 +35,7 @@ WITH datas AS (
 
 bronze_pares AS (
   SELECT DISTINCT produto, classe
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
 ),
 
 bronze_entrada AS (
@@ -55,7 +55,7 @@ silver_serie AS (
     classe,
     ANY_VALUE(grupo) AS grupo,
     ARRAY_AGG(STRUCT(data AS data, preco_comum AS preco_comum) ORDER BY data) AS pregoes
-  FROM `pdm-ceasa.silver.cotacoes`
+  FROM `silver.cotacoes`
   GROUP BY produto, classe
 ),
 
@@ -102,7 +102,7 @@ bronze_linear AS (
     'bronze' AS camada, 'regressao_linear' AS modelo,
     produto, classe, data, predicted_alvo AS preco_previsto
   FROM ML.PREDICT(
-    MODEL `pdm-ceasa.baseline.modelo_regressao_linear`,
+    MODEL `baseline.modelo_regressao_linear`,
     (SELECT * FROM bronze_entrada)
   )
 ),
@@ -112,7 +112,7 @@ bronze_arvore AS (
     'bronze' AS camada, 'regressao_arvore' AS modelo,
     produto, classe, data, predicted_alvo AS preco_previsto
   FROM ML.PREDICT(
-    MODEL `pdm-ceasa.baseline.modelo_regressao_arvore`,
+    MODEL `baseline.modelo_regressao_arvore`,
     (SELECT * FROM bronze_entrada)
   )
 ),
@@ -125,7 +125,7 @@ bronze_arima AS (
     DATE(forecast_timestamp) AS data,
     forecast_value AS preco_previsto
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.baseline.modelo_serie_arima`,
+    MODEL `baseline.modelo_serie_arima`,
     STRUCT(4 AS horizon)
   )
   WHERE DATE(forecast_timestamp) IN (DATE '2026-09-01', DATE '2026-09-03', DATE '2026-09-04')
@@ -136,7 +136,7 @@ silver_linear AS (
     'silver' AS camada, 'regressao_linear' AS modelo,
     produto, classe, data, predicted_alvo AS preco_previsto
   FROM ML.PREDICT(
-    MODEL `pdm-ceasa.silver.modelo_regressao_linear`,
+    MODEL `silver.modelo_regressao_linear`,
     (SELECT * FROM silver_entrada)
   )
 ),
@@ -146,7 +146,7 @@ silver_arvore AS (
     'silver' AS camada, 'regressao_arvore' AS modelo,
     produto, classe, data, predicted_alvo AS preco_previsto
   FROM ML.PREDICT(
-    MODEL `pdm-ceasa.silver.modelo_regressao_arvore`,
+    MODEL `silver.modelo_regressao_arvore`,
     (SELECT * FROM silver_entrada)
   )
 ),
@@ -158,7 +158,7 @@ silver_arima AS (
     DATE(forecast_timestamp) AS data,
     forecast_value AS preco_previsto
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.silver.modelo_serie_arima`,
+    MODEL `silver.modelo_serie_arima`,
     STRUCT(60 AS horizon)
   )
   WHERE DATE(forecast_timestamp) IN (DATE '2026-09-01', DATE '2026-09-03', DATE '2026-09-04')

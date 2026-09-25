@@ -24,7 +24,7 @@ DECLARE p_produto_bronze STRING;
 
 SET p_produto_bronze = (
   SELECT ANY_VALUE(produto)
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
   WHERE classe = p_classe
     AND REPLACE(
           LOWER(REGEXP_REPLACE(NORMALIZE(REGEXP_REPLACE(TRIM(produto), r' +', ' '), NFD), r'\pM', '')),
@@ -34,7 +34,7 @@ SET p_produto_bronze = (
 
 WITH data_base_encontrada AS (
   SELECT MAX(data) AS data_base_usada
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
   WHERE produto = p_produto_bronze
     AND classe = p_classe
     AND data <= p_data_base_alvo
@@ -64,7 +64,7 @@ SELECT
   END AS observacao
 FROM vetor AS v
 LEFT JOIN ML.PREDICT(
-  MODEL `pdm-ceasa.baseline.modelo_regressao_arvore`,
+  MODEL `baseline.modelo_regressao_arvore`,
   (
     SELECT
       p_produto_bronze AS produto,

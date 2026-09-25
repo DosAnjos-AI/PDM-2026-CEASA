@@ -34,10 +34,10 @@
 -- treinados e ZERA o bloco demo (volta a NULL) -- rodar
 -- scripts/metricas_demo.py de novo em seguida para repreenche-lo.
 
-CREATE SCHEMA IF NOT EXISTS `pdm-ceasa.metricas`
+CREATE SCHEMA IF NOT EXISTS `metricas`
 OPTIONS (location = 'US');
 
-CREATE OR REPLACE TABLE `pdm-ceasa.metricas.comparacao_modelos` AS
+CREATE OR REPLACE TABLE `metricas.comparacao_modelos` AS
 
 WITH bronze_linear AS (
   SELECT
@@ -53,10 +53,10 @@ WITH bronze_linear AS (
     CAST(NULL AS INT64) AS n_obs_demo,
     'instavel: entre execucoes identicas variou de R2 -180.271 para -1.535.675' AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.baseline.modelo_regressao_linear`,
+    MODEL `baseline.modelo_regressao_linear`,
     (
       SELECT produto, classe, mes, dia_semana, alvo
-      FROM `pdm-ceasa.baseline.dados_treino`
+      FROM `baseline.dados_treino`
       WHERE data >= '2026-01-01'
     )
   )
@@ -76,10 +76,10 @@ bronze_arvore AS (
     CAST(NULL AS INT64) AS n_obs_demo,
     CAST(NULL AS STRING) AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.baseline.modelo_regressao_arvore`,
+    MODEL `baseline.modelo_regressao_arvore`,
     (
       SELECT produto, classe, mes, dia_semana, alvo
-      FROM `pdm-ceasa.baseline.dados_treino`
+      FROM `baseline.dados_treino`
       WHERE data >= '2026-01-01'
     )
   )
@@ -114,12 +114,12 @@ silver_linear AS (
     CAST(NULL AS INT64) AS n_obs_demo,
     'elastic net, L1=1.0 e L2=1.0; features incluem 5 lags - a comparacao com a bronze mede limpeza e engenharia de features somadas' AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.silver.modelo_regressao_linear`,
+    MODEL `silver.modelo_regressao_linear`,
     (
       SELECT
         produto, classe, grupo, ano, mes, dia_semana,
         lag_7, lag_14, lag_30, lag_365, lag_730, alvo
-      FROM `pdm-ceasa.silver.dados_treino`
+      FROM `silver.dados_treino`
       WHERE data >= '2026-01-01'
     )
   )
@@ -139,12 +139,12 @@ silver_arvore AS (
     CAST(NULL AS INT64) AS n_obs_demo,
     'features incluem 5 lags - a comparacao com a bronze mede limpeza e engenharia de features somadas' AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.silver.modelo_regressao_arvore`,
+    MODEL `silver.modelo_regressao_arvore`,
     (
       SELECT
         produto, classe, grupo, ano, mes, dia_semana,
         lag_7, lag_14, lag_30, lag_365, lag_730, alvo
-      FROM `pdm-ceasa.silver.dados_treino`
+      FROM `silver.dados_treino`
       WHERE data >= '2026-01-01'
     )
   )

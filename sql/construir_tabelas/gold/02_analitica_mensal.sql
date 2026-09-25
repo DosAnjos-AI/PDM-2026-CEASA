@@ -24,7 +24,7 @@
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo
 -- resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.gold.analitica_mensal` AS
+CREATE OR REPLACE TABLE `gold.analitica_mensal` AS
 WITH mensal_real AS (
   SELECT
     produto,
@@ -39,7 +39,7 @@ WITH mensal_real AS (
     AVG(preco_kg) AS media_preco_kg,
     COUNT(*) AS n_pregoes,
     COUNT(DISTINCT (EXTRACT(ISOYEAR FROM data) * 100 + EXTRACT(ISOWEEK FROM data))) AS n_semanas
-  FROM `pdm-ceasa.silver.cotacoes`
+  FROM `silver.cotacoes`
   GROUP BY produto, classe, data_inicio_mes, ano, mes
 ),
 classificado_bruto AS (

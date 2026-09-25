@@ -7,8 +7,8 @@
 -- Nao faz: nao cria, altera nem substitui nenhuma tabela ou modelo.
 
 SELECT COUNT(*) AS total_linhas
-FROM `pdm-ceasa.metricas.comparacao_modelos`;
+FROM `metricas.comparacao_modelos`;
 
 SELECT *
-FROM `pdm-ceasa.metricas.comparacao_modelos`
+FROM `metricas.comparacao_modelos`
 ORDER BY camada, granularidade, modelo;

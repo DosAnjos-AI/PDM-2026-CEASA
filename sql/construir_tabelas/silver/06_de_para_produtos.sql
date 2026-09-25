@@ -10,7 +10,7 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_06_depara` AS
+CREATE OR REPLACE TABLE `silver.stg_06_depara` AS
 WITH depara AS (
   SELECT * FROM UNNEST([
     STRUCT('pimenta_dedo-de-_moca' AS origem, 'pimenta_dedo-de-moca' AS destino),
@@ -28,5 +28,5 @@ SELECT
   COALESCE(d.destino, s.produto) AS produto,
   s.embalagem, s.qtd_kg, s.classe, s.preco_comum, s.preco_maximo,
   s.preco_minimo, s.preco_kg
-FROM `pdm-ceasa.silver.stg_05_sem_outliers` AS s
+FROM `silver.stg_05_sem_outliers` AS s
 LEFT JOIN depara AS d ON d.origem = s.produto;

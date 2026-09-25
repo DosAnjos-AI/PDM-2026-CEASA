@@ -11,8 +11,8 @@
 set -euo pipefail
 
 # --- Configuracao (unica fonte dos valores usados abaixo) ---
-PROJETO="${PROJETO:-pdm-ceasa}"
-BUCKET="${BUCKET:-gs://pdm-ceasa-dados}"
+PROJETO="${PROJETO:-pdm-caio-2026}"
+BUCKET="${BUCKET:-gs://trabalho-pdm-caio}"
 OBJETO_CSV="${OBJETO_CSV:-raw/cotacoes_site.csv}"
 PDFS="${PDFS:-/mnt/pdfs/cotacoes}"
 CSV="${CSV:-/tmp/cotacoes_site.csv}"
@@ -51,7 +51,15 @@ for diretorio in "${DIRETORIOS_SQL[@]}"; do
         # motivo para pular silenciosamente uma camada inteira do pipeline.
         [[ -f "${arquivo}" ]] || { echo "ERRO: nenhum .sql em ${diretorio}" >&2; exit 1; }
         echo "-- ${arquivo}"
-        bq query --project_id="${PROJETO}" --use_legacy_sql=false --quiet < "${arquivo}"
+        # 01_bronze.sql e o unico que precisa saber o bucket: ele monta o
+        # LOAD DATA com EXECUTE IMMEDIATE a partir deste parametro. Os demais
+        # so usam dataset.tabela, resolvido por --project_id.
+        if [[ "${arquivo}" == *"/bronze/01_bronze.sql" ]]; then
+            bq query --project_id="${PROJETO}" --use_legacy_sql=false --quiet \
+               --parameter="bucket:STRING:${BUCKET}" < "${arquivo}"
+        else
+            bq query --project_id="${PROJETO}" --use_legacy_sql=false --quiet < "${arquivo}"
+        fi
     done
 done
 

@@ -13,7 +13,7 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_02_normalizado` AS
+CREATE OR REPLACE TABLE `silver.stg_02_normalizado` AS
 SELECT
   data,
   ano,
@@ -52,4 +52,4 @@ SELECT
   CAST(preco_maximo AS FLOAT64) AS preco_maximo,
   CAST(preco_minimo AS FLOAT64) AS preco_minimo,
   CAST(preco_kg AS FLOAT64) AS preco_kg
-FROM `pdm-ceasa.silver.stg_01_deduplicado`;
+FROM `silver.stg_01_deduplicado`;

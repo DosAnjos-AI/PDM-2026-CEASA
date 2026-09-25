@@ -14,7 +14,7 @@
 
 WITH base AS (
   SELECT produto, classe, data_inicio_semana, media_preco_comum
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
 ),
 origem AS (
   SELECT
@@ -65,15 +65,15 @@ SELECT
   COUNT(DISTINCT CONCAT(produto, '|', CAST(classe AS STRING))) AS pares,
   MIN(data_inicio_semana) AS data_min,
   MAX(data_inicio_semana) AS data_max
-FROM `pdm-ceasa.gold.treino_semanal`;
+FROM `gold.treino_semanal`;
 
 -- produtos da Silver que saem da tabela de treino (esperado: achado, nao
 -- necessariamente vazio -- lag_104s custa as 2 primeiras temporadas)
 SELECT produto
 FROM (
-  SELECT DISTINCT produto FROM `pdm-ceasa.silver.cotacoes`
+  SELECT DISTINCT produto FROM `silver.cotacoes`
   EXCEPT DISTINCT
-  SELECT DISTINCT produto FROM `pdm-ceasa.gold.treino_semanal`
+  SELECT DISTINCT produto FROM `gold.treino_semanal`
 )
 ORDER BY produto;
 
@@ -83,8 +83,8 @@ WITH prova AS (
   SELECT
     t.lag_1s,
     a.media_preco_comum AS preco_semana_anterior
-  FROM `pdm-ceasa.gold.treino_semanal` AS t
-  JOIN `pdm-ceasa.gold.analitica_semanal` AS a
+  FROM `gold.treino_semanal` AS t
+  JOIN `gold.analitica_semanal` AS a
     ON a.produto = t.produto
    AND a.classe = t.classe
    AND a.data_inicio_semana = DATE_SUB(t.data_inicio_semana, INTERVAL 7 DAY)

@@ -30,7 +30,7 @@ DECLARE p_chave_mes_base INT64 DEFAULT EXTRACT(YEAR FROM p_data_base_mes) * 12 +
 -- ===================================== SEMANAL =====================================
 WITH base AS (
   SELECT produto, classe, grupo, isoyear, isoweek, data_inicio_semana, media_preco_comum
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
   WHERE produto = p_produto AND classe = p_classe
 ),
 data_base_encontrada AS (
@@ -77,7 +77,7 @@ SELECT
   END AS observacao
 FROM vetor AS v
 LEFT JOIN ML.PREDICT(
-  MODEL `pdm-ceasa.gold.modelo_regressao_arvore_semanal`,
+  MODEL `gold.modelo_regressao_arvore_semanal`,
   (
     SELECT
       p_produto AS produto, p_classe AS classe, v.grupo AS grupo, v.isoyear AS isoyear, v.isoweek AS isoweek,
@@ -92,7 +92,7 @@ ON TRUE;
 -- ===================================== MENSAL =====================================
 WITH base AS (
   SELECT produto, classe, grupo, ano, mes, media_preco_comum, ano * 12 + mes AS chave_mes
-  FROM `pdm-ceasa.gold.analitica_mensal`
+  FROM `gold.analitica_mensal`
   WHERE produto = p_produto AND classe = p_classe
 ),
 data_base_encontrada AS (
@@ -135,7 +135,7 @@ SELECT
   END AS observacao
 FROM vetor AS v
 LEFT JOIN ML.PREDICT(
-  MODEL `pdm-ceasa.gold.modelo_regressao_arvore_mensal`,
+  MODEL `gold.modelo_regressao_arvore_mensal`,
   (
     SELECT
       p_produto AS produto, p_classe AS classe, v.grupo AS grupo, v.ano AS ano, v.mes AS mes,

@@ -10,19 +10,19 @@ SELECT
   COUNTIF(interpolado) AS linhas_interpoladas,
   COUNTIF(NOT interpolado) AS linhas_reais,
   COUNT(DISTINCT CONCAT(produto, '|', CAST(classe AS STRING))) AS pares
-FROM `pdm-ceasa.gold.analitica_mensal`;
+FROM `gold.analitica_mensal`;
 
 -- distribuicao de n_semanas por mes (apenas meses com pregao real)
 SELECT
   MIN(n_semanas) AS min_n_semanas,
   APPROX_QUANTILES(n_semanas, 2)[OFFSET(1)] AS mediana_n_semanas,
   MAX(n_semanas) AS max_n_semanas
-FROM `pdm-ceasa.gold.analitica_mensal`
+FROM `gold.analitica_mensal`
 WHERE NOT interpolado;
 
 -- distribuicao completa de n_semanas (achado se aparecer 6+ semanas)
 SELECT n_semanas, COUNT(*) AS quantidade
-FROM `pdm-ceasa.gold.analitica_mensal`
+FROM `gold.analitica_mensal`
 WHERE NOT interpolado
 GROUP BY n_semanas
 ORDER BY n_semanas;
@@ -32,7 +32,7 @@ WITH indexado AS (
   SELECT
     produto, classe, ano, mes, interpolado,
     ROW_NUMBER() OVER (PARTITION BY produto, classe ORDER BY ano, mes) AS idx
-  FROM `pdm-ceasa.gold.analitica_mensal`
+  FROM `gold.analitica_mensal`
 ),
 somente_interpolado AS (
   SELECT
@@ -58,7 +58,7 @@ WITH indexado AS (
     interpolado,
     ROW_NUMBER() OVER (PARTITION BY produto, classe ORDER BY ano, mes) AS idx,
     COUNT(*) OVER (PARTITION BY produto, classe) AS total
-  FROM `pdm-ceasa.gold.analitica_mensal`
+  FROM `gold.analitica_mensal`
 )
 SELECT COUNT(*) AS violacoes_ponta
 FROM indexado

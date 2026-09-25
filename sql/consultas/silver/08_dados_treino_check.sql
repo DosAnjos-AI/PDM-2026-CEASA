@@ -16,7 +16,7 @@ WITH serie AS (
     produto,
     classe,
     ARRAY_AGG(STRUCT(data AS data, preco_comum AS preco_comum) ORDER BY data) AS pregoes
-  FROM `pdm-ceasa.silver.cotacoes`
+  FROM `silver.cotacoes`
   GROUP BY produto, classe
 ),
 recalculo AS (
@@ -52,7 +52,7 @@ recalculo AS (
       WHERE p.data <= DATE_SUB(c.data, INTERVAL 730 DAY)
       ORDER BY p.data DESC LIMIT 1
     ) AS lag_730
-  FROM `pdm-ceasa.silver.cotacoes` AS c
+  FROM `silver.cotacoes` AS c
   JOIN serie AS s ON s.produto = c.produto AND s.classe = c.classe
 ),
 resumo_descarte AS (
@@ -82,6 +82,6 @@ resumo_tabela AS (
     MAX(data) AS data_max,
     COUNTIF(data <= '2025-12-31') AS linhas_treino,
     COUNTIF(data >= '2026-01-01') AS linhas_teste
-  FROM `pdm-ceasa.silver.dados_treino`
+  FROM `silver.dados_treino`
 )
 SELECT * FROM resumo_descarte, resumo_tabela;

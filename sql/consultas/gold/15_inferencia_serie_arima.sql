@@ -45,13 +45,13 @@ DECLARE p_mes_alvo DATE DEFAULT DATE_TRUNC(p_data_alvo, MONTH);
 -- ===================================== SEMANAL =====================================
 WITH ultima_observacao AS (
   SELECT MAX(data_inicio_semana) AS data_base_usada
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
   WHERE produto = p_produto AND classe = p_classe
 ),
 forecast AS (
   SELECT *
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.gold.modelo_serie_arima_semanal`,
+    MODEL `gold.modelo_serie_arima_semanal`,
     STRUCT(90 AS horizon, 0.95 AS confidence_level)
   )
   WHERE produto = p_produto AND classe = p_classe
@@ -89,13 +89,13 @@ LEFT JOIN forecast AS f
 -- ===================================== MENSAL =====================================
 WITH ultima_observacao AS (
   SELECT MAX(DATE(ano, mes, 1)) AS data_base_usada
-  FROM `pdm-ceasa.gold.analitica_mensal`
+  FROM `gold.analitica_mensal`
   WHERE produto = p_produto AND classe = p_classe
 ),
 forecast AS (
   SELECT *
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.gold.modelo_serie_arima_mensal`,
+    MODEL `gold.modelo_serie_arima_mensal`,
     STRUCT(24 AS horizon, 0.95 AS confidence_level)
   )
   WHERE produto = p_produto AND classe = p_classe

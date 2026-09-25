@@ -6,7 +6,7 @@
 --
 -- CREATE OR REPLACE MODEL: idempotente, reexecutar substitui o modelo anterior.
 
-CREATE OR REPLACE MODEL `pdm-ceasa.baseline.modelo_regressao_linear`
+CREATE OR REPLACE MODEL `baseline.modelo_regressao_linear`
 OPTIONS (
   model_type = 'LINEAR_REG',
   input_label_cols = ['alvo']
@@ -17,5 +17,5 @@ SELECT
   mes,
   dia_semana,
   alvo
-FROM `pdm-ceasa.baseline.dados_treino`
+FROM `baseline.dados_treino`
 WHERE data <= '2025-12-31';

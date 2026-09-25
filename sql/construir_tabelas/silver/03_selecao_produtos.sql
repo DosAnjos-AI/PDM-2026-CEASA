@@ -16,10 +16,10 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_03a_lista_5a` AS
+CREATE OR REPLACE TABLE `silver.stg_03a_lista_5a` AS
 WITH produto_stats_geral AS (
   SELECT produto, MIN(data) AS primeira_data, MAX(data) AS ultima_data
-  FROM `pdm-ceasa.silver.stg_02_normalizado`
+  FROM `silver.stg_02_normalizado`
   GROUP BY produto
 ),
 sobreviventes_1_2 AS (
@@ -30,7 +30,7 @@ sobreviventes_1_2 AS (
 ),
 base_2017 AS (
   SELECT *
-  FROM `pdm-ceasa.silver.stg_02_normalizado`
+  FROM `silver.stg_02_normalizado`
   WHERE data >= '2017-01-01'
 ),
 calendario_2017 AS (
@@ -60,9 +60,9 @@ SELECT produto
 FROM densidade_2017
 WHERE pregoes_cotados / pregoes_existentes >= 0.80;
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_03b_lista_final` AS
+CREATE OR REPLACE TABLE `silver.stg_03b_lista_final` AS
 WITH calendario_total AS (
-  SELECT DISTINCT data FROM `pdm-ceasa.silver.stg_02_normalizado`
+  SELECT DISTINCT data FROM `silver.stg_02_normalizado`
 ),
 produto_stats_total AS (
   SELECT
@@ -70,8 +70,8 @@ produto_stats_total AS (
     MIN(data) AS primeira_data,
     MAX(data) AS ultima_data,
     COUNT(DISTINCT data) AS pregoes_cotados
-  FROM `pdm-ceasa.silver.stg_02_normalizado`
-  WHERE produto IN (SELECT produto FROM `pdm-ceasa.silver.stg_03a_lista_5a`)
+  FROM `silver.stg_02_normalizado`
+  WHERE produto IN (SELECT produto FROM `silver.stg_03a_lista_5a`)
   GROUP BY produto
 ),
 densidade_total AS (
@@ -88,7 +88,7 @@ SELECT produto
 FROM densidade_total
 WHERE pregoes_cotados / pregoes_existentes >= 0.92;
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_03_selecionado` AS
+CREATE OR REPLACE TABLE `silver.stg_03_selecionado` AS
 SELECT *
-FROM `pdm-ceasa.silver.stg_02_normalizado`
-WHERE produto IN (SELECT produto FROM `pdm-ceasa.silver.stg_03b_lista_final`);
+FROM `silver.stg_02_normalizado`
+WHERE produto IN (SELECT produto FROM `silver.stg_03b_lista_final`);

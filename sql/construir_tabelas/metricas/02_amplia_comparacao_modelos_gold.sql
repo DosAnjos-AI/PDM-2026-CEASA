@@ -1,4 +1,4 @@
--- Amplia pdm-ceasa.metricas.comparacao_modelos com as 6 linhas dos modelos
+-- Amplia metricas.comparacao_modelos com as 6 linhas dos modelos
 -- gold (linear, arvore e ARIMA, semanal e mensal), totalizando 12 linhas.
 --
 -- Faz:
@@ -34,17 +34,17 @@
 -- sql/consultas/metricas/04_comparacao_modelos_check_gold.sql, comparando
 -- com o snapshot tirado antes desta ampliacao).
 
-ALTER TABLE `pdm-ceasa.metricas.comparacao_modelos`
+ALTER TABLE `metricas.comparacao_modelos`
   ADD COLUMN IF NOT EXISTS granularidade STRING;
 
-UPDATE `pdm-ceasa.metricas.comparacao_modelos`
+UPDATE `metricas.comparacao_modelos`
 SET granularidade = 'diario'
 WHERE granularidade IS NULL;
 
-DELETE FROM `pdm-ceasa.metricas.comparacao_modelos`
+DELETE FROM `metricas.comparacao_modelos`
 WHERE camada = 'gold';
 
-INSERT INTO `pdm-ceasa.metricas.comparacao_modelos`
+INSERT INTO `metricas.comparacao_modelos`
 (camada, modelo, granularidade, r2, mae, mse, rmse, mae_demo, mse_demo, rmse_demo, n_obs_demo, observacao)
 
 WITH gold_linear_semanal AS (
@@ -56,10 +56,10 @@ WITH gold_linear_semanal AS (
     CAST(NULL AS FLOAT64) AS rmse_demo, CAST(NULL AS INT64) AS n_obs_demo,
     'alvo e media de periodo (semanal/mensal), nao preco diario - o erro e menor por construcao, ja que media suaviza a variacao; nao e comparavel em escala com as camadas bronze e silver, que preveem preco de um dia. Features incluem lags de periodo; a comparacao entre camadas mede limpeza, engenharia de features e granularidade somadas. Elastic net, L1=1.0 e L2=1.0, mesmos valores da Silver, para comparabilidade.' AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.gold.modelo_regressao_linear_semanal`,
+    MODEL `gold.modelo_regressao_linear_semanal`,
     (
       SELECT produto, classe, grupo, isoyear, isoweek, lag_1s, lag_2s, lag_4s, lag_52s, lag_104s, alvo
-      FROM `pdm-ceasa.gold.treino_semanal`
+      FROM `gold.treino_semanal`
       WHERE data_inicio_semana > '2025-12-31'
     )
   )
@@ -74,10 +74,10 @@ gold_linear_mensal AS (
     CAST(NULL AS FLOAT64) AS rmse_demo, CAST(NULL AS INT64) AS n_obs_demo,
     'alvo e media de periodo (semanal/mensal), nao preco diario - o erro e menor por construcao, ja que media suaviza a variacao; nao e comparavel em escala com as camadas bronze e silver, que preveem preco de um dia. Features incluem lags de periodo; a comparacao entre camadas mede limpeza, engenharia de features e granularidade somadas. Elastic net, L1=1.0 e L2=1.0, mesmos valores da Silver, para comparabilidade.' AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.gold.modelo_regressao_linear_mensal`,
+    MODEL `gold.modelo_regressao_linear_mensal`,
     (
       SELECT produto, classe, grupo, ano, mes, lag_1m, lag_12m, lag_24m, alvo
-      FROM `pdm-ceasa.gold.treino_mensal`
+      FROM `gold.treino_mensal`
       WHERE DATE(ano, mes, 1) > '2025-12-31'
     )
   )
@@ -92,10 +92,10 @@ gold_arvore_semanal AS (
     CAST(NULL AS FLOAT64) AS rmse_demo, CAST(NULL AS INT64) AS n_obs_demo,
     'alvo e media de periodo (semanal/mensal), nao preco diario - o erro e menor por construcao, ja que media suaviza a variacao; nao e comparavel em escala com as camadas bronze e silver, que preveem preco de um dia. Features incluem lags de periodo; a comparacao entre camadas mede limpeza, engenharia de features e granularidade somadas. MAX_ITERATIONS=20 e EARLY_STOP=TRUE, defaults do BigQuery ML, sem varredura de hiperparametros.' AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.gold.modelo_regressao_arvore_semanal`,
+    MODEL `gold.modelo_regressao_arvore_semanal`,
     (
       SELECT produto, classe, grupo, isoyear, isoweek, lag_1s, lag_2s, lag_4s, lag_52s, lag_104s, alvo
-      FROM `pdm-ceasa.gold.treino_semanal`
+      FROM `gold.treino_semanal`
       WHERE data_inicio_semana > '2025-12-31'
     )
   )
@@ -110,10 +110,10 @@ gold_arvore_mensal AS (
     CAST(NULL AS FLOAT64) AS rmse_demo, CAST(NULL AS INT64) AS n_obs_demo,
     'alvo e media de periodo (semanal/mensal), nao preco diario - o erro e menor por construcao, ja que media suaviza a variacao; nao e comparavel em escala com as camadas bronze e silver, que preveem preco de um dia. Features incluem lags de periodo; a comparacao entre camadas mede limpeza, engenharia de features e granularidade somadas. MAX_ITERATIONS=20 e EARLY_STOP=TRUE, defaults do BigQuery ML, sem varredura de hiperparametros.' AS observacao
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.gold.modelo_regressao_arvore_mensal`,
+    MODEL `gold.modelo_regressao_arvore_mensal`,
     (
       SELECT produto, classe, grupo, ano, mes, lag_1m, lag_12m, lag_24m, alvo
-      FROM `pdm-ceasa.gold.treino_mensal`
+      FROM `gold.treino_mensal`
       WHERE DATE(ano, mes, 1) > '2025-12-31'
     )
   )

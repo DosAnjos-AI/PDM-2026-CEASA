@@ -10,13 +10,13 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_05_sem_outliers` AS
+CREATE OR REPLACE TABLE `silver.stg_05_sem_outliers` AS
 WITH com_quartis AS (
   SELECT
     *,
     PERCENTILE_CONT(preco_kg, 0.25) OVER (PARTITION BY produto, classe, ano) AS q1,
     PERCENTILE_CONT(preco_kg, 0.75) OVER (PARTITION BY produto, classe, ano) AS q3
-  FROM `pdm-ceasa.silver.stg_04_preco_coerente`
+  FROM `silver.stg_04_preco_coerente`
 ),
 com_iqr AS (
   SELECT *, (q3 - q1) AS iqr

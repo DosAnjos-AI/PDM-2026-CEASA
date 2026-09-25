@@ -25,12 +25,12 @@
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo
 -- resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.gold.treino_semanal` AS
+CREATE OR REPLACE TABLE `gold.treino_semanal` AS
 WITH base AS (
   SELECT
     produto, classe, grupo, isoyear, isoweek, data_inicio_semana,
     media_preco_comum
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
 ),
 com_lags AS (
   SELECT

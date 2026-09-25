@@ -29,13 +29,13 @@ DECLARE p_data_alvo DATE   DEFAULT '2026-09-04';
 
 WITH ultima_observacao AS (
   SELECT MAX(data) AS data_base_usada
-  FROM `pdm-ceasa.silver.cotacoes`
+  FROM `silver.cotacoes`
   WHERE produto = p_produto AND classe = p_classe
 ),
 forecast AS (
   SELECT *
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.silver.modelo_serie_arima`,
+    MODEL `silver.modelo_serie_arima`,
     STRUCT(60 AS horizon, 0.95 AS confidence_level)
   )
   WHERE produto = p_produto AND classe = p_classe

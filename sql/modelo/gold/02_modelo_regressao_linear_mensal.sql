@@ -18,7 +18,7 @@
 --
 -- Alvo e media de preco do mes seguinte (media de periodo), nao preco de um
 -- dia -- ressalva de escala obrigatoria, gravada em
--- pdm-ceasa.metricas.comparacao_modelos junto com esta linha.
+-- metricas.comparacao_modelos junto com esta linha.
 --
 -- Regra do repositorio: script de treino nao se reexecuta por rotina.
 -- CREATE OR REPLACE MODEL retreina ao rodar; para validar sintaxe sem
@@ -26,7 +26,7 @@
 -- LINEAR_REG tem inicializacao estocastica -- reexecutar sem mudar o
 -- desenho do modelo nao reproduz a metrica exata.
 
-CREATE OR REPLACE MODEL `pdm-ceasa.gold.modelo_regressao_linear_mensal`
+CREATE OR REPLACE MODEL `gold.modelo_regressao_linear_mensal`
 OPTIONS (
   model_type = 'LINEAR_REG',
   input_label_cols = ['alvo'],
@@ -45,5 +45,5 @@ SELECT
   lag_12m,
   lag_24m,
   alvo
-FROM `pdm-ceasa.gold.treino_mensal`
+FROM `gold.treino_mensal`
 WHERE DATE(ano, mes, 1) <= '2025-12-31';

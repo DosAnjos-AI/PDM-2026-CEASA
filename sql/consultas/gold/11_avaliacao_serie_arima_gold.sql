@@ -20,7 +20,7 @@ SELECT
   non_seasonal_p, non_seasonal_d, non_seasonal_q,
   has_drift, has_holiday_effect, has_spikes_and_dips, has_step_changes,
   seasonal_periods, aic, variance, error_message
-FROM ML.ARIMA_EVALUATE(MODEL `pdm-ceasa.gold.modelo_serie_arima_semanal`)
+FROM ML.ARIMA_EVALUATE(MODEL `gold.modelo_serie_arima_semanal`)
 ORDER BY produto, classe;
 
 -- Semanal: series na fonte vs. series avaliadas (com e sem erro).
@@ -29,14 +29,14 @@ ORDER BY produto, classe;
 -- string vazia como erro). NULLIF trata os dois casos corretamente.
 WITH series_fonte AS (
   SELECT COUNT(DISTINCT CONCAT(produto, '|', CAST(classe AS STRING))) AS total_series
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
 ),
 series_avaliadas AS (
   SELECT
     COUNT(*) AS total_avaliadas,
     COUNTIF(NULLIF(error_message, '') IS NOT NULL) AS com_erro,
     COUNTIF(NULLIF(error_message, '') IS NULL) AS sem_erro
-  FROM ML.ARIMA_EVALUATE(MODEL `pdm-ceasa.gold.modelo_serie_arima_semanal`)
+  FROM ML.ARIMA_EVALUATE(MODEL `gold.modelo_serie_arima_semanal`)
 )
 SELECT
   'semanal' AS granularidade,
@@ -52,20 +52,20 @@ SELECT
   non_seasonal_p, non_seasonal_d, non_seasonal_q,
   has_drift, has_holiday_effect, has_spikes_and_dips, has_step_changes,
   seasonal_periods, aic, variance, error_message
-FROM ML.ARIMA_EVALUATE(MODEL `pdm-ceasa.gold.modelo_serie_arima_mensal`)
+FROM ML.ARIMA_EVALUATE(MODEL `gold.modelo_serie_arima_mensal`)
 ORDER BY produto, classe;
 
 -- Mensal: series na fonte vs. series avaliadas (com e sem erro)
 WITH series_fonte AS (
   SELECT COUNT(DISTINCT CONCAT(produto, '|', CAST(classe AS STRING))) AS total_series
-  FROM `pdm-ceasa.gold.analitica_mensal`
+  FROM `gold.analitica_mensal`
 ),
 series_avaliadas AS (
   SELECT
     COUNT(*) AS total_avaliadas,
     COUNTIF(NULLIF(error_message, '') IS NOT NULL) AS com_erro,
     COUNTIF(NULLIF(error_message, '') IS NULL) AS sem_erro
-  FROM ML.ARIMA_EVALUATE(MODEL `pdm-ceasa.gold.modelo_serie_arima_mensal`)
+  FROM ML.ARIMA_EVALUATE(MODEL `gold.modelo_serie_arima_mensal`)
 )
 SELECT
   'mensal' AS granularidade,

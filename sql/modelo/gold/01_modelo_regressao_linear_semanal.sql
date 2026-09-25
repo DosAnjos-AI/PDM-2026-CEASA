@@ -22,7 +22,7 @@
 --
 -- Alvo e media de preco da semana seguinte (media de periodo), nao preco de
 -- um dia -- ressalva de escala obrigatoria, gravada em
--- pdm-ceasa.metricas.comparacao_modelos junto com esta linha.
+-- metricas.comparacao_modelos junto com esta linha.
 --
 -- Regra do repositorio: script de treino nao se reexecuta por rotina.
 -- CREATE OR REPLACE MODEL retreina ao rodar; para validar sintaxe sem
@@ -31,7 +31,7 @@
 -- desenho do modelo nao reproduz a metrica exata; variacao sem mudanca de
 -- desenho e ruido do treino, nao regressao do modelo.
 
-CREATE OR REPLACE MODEL `pdm-ceasa.gold.modelo_regressao_linear_semanal`
+CREATE OR REPLACE MODEL `gold.modelo_regressao_linear_semanal`
 OPTIONS (
   model_type = 'LINEAR_REG',
   input_label_cols = ['alvo'],
@@ -52,5 +52,5 @@ SELECT
   lag_52s,
   lag_104s,
   alvo
-FROM `pdm-ceasa.gold.treino_semanal`
+FROM `gold.treino_semanal`
 WHERE data_inicio_semana <= '2025-12-31';

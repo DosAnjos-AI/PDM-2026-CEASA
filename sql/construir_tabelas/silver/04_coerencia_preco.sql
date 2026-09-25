@@ -11,9 +11,9 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_04_preco_coerente` AS
+CREATE OR REPLACE TABLE `silver.stg_04_preco_coerente` AS
 SELECT *
-FROM `pdm-ceasa.silver.stg_03_selecionado`
+FROM `silver.stg_03_selecionado`
 WHERE NOT (
   qtd_kg IS NULL OR qtd_kg = 0
   OR preco_comum = 0

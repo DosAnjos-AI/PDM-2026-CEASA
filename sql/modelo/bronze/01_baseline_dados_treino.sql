@@ -21,13 +21,13 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.baseline.dados_treino` AS
+CREATE OR REPLACE TABLE `baseline.dados_treino` AS
 WITH serie AS (
   SELECT
     produto,
     classe,
     ARRAY_AGG(STRUCT(data AS data, preco_comum AS preco_comum) ORDER BY data) AS pregoes
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
   GROUP BY produto, classe
 ),
 com_alvo AS (
@@ -44,7 +44,7 @@ com_alvo AS (
       ORDER BY p.data ASC
       LIMIT 1
     ) AS alvo
-  FROM `pdm-ceasa.bronze.cotacoes` AS b
+  FROM `bronze.cotacoes` AS b
   JOIN serie AS s
     ON s.produto = b.produto
    AND s.classe = b.classe

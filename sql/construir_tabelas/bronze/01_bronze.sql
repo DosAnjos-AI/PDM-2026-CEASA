@@ -1,13 +1,23 @@
--- Camada Bronze: carrega o CSV bruto do bucket para pdm-ceasa.bronze.cotacoes.
+-- Camada Bronze: carrega o CSV bruto do bucket para bronze.cotacoes.
 -- Dado como veio, sem tratamento, sem filtro. Nenhuma coluna é NOT NULL:
 -- nulo é defeito a resolver na Silver, não motivo para rejeitar linha.
 --
 -- LOAD DATA OVERWRITE reconstrói a tabela inteira a cada execução (idempotente).
--- Origem por wildcard: um arquivo novo em gs://pdm-ceasa-dados/raw/ entra sem editar o script.
+-- Origem por wildcard: um arquivo novo no prefixo raw/ entra sem editar o script.
 -- Sem tolerância a linha inválida (max_bad_records padrão = 0): a carga falha
 -- em vez de descartar linha em silêncio.
+--
+-- O bucket vem por parâmetro, não fica gravado aqui: cada projeto tem o seu.
+--   bq query --project_id=<projeto> --use_legacy_sql=false \
+--            --parameter='bucket:STRING:gs://<bucket>' < 01_bronze.sql
+-- FROM FILES não aceita parâmetro na lista de uris, por isso o comando é
+-- montado com FORMAT e executado por EXECUTE IMMEDIATE.
+--
+-- O nome do projeto também não aparece: `bronze.cotacoes` resolve contra o
+-- projeto de --project_id. O mesmo vale para todo o restante do pipeline.
 
-LOAD DATA OVERWRITE `pdm-ceasa.bronze.cotacoes`
+EXECUTE IMMEDIATE FORMAT("""
+LOAD DATA OVERWRITE `bronze.cotacoes`
 (
   data          DATE,
   ano           INT64,
@@ -29,9 +39,10 @@ LOAD DATA OVERWRITE `pdm-ceasa.bronze.cotacoes`
 )
 FROM FILES (
   format = 'CSV',
-  uris = ['gs://pdm-ceasa-dados/raw/*.csv'],
+  uris = ['%s/raw/*.csv'],
   skip_leading_rows = 1,
   field_delimiter = ',',
   quote = '"',
   encoding = 'UTF-8'
-);
+)
+""", @bucket);

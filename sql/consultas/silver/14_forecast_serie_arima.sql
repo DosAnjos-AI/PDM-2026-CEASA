@@ -29,7 +29,7 @@ SELECT
   prediction_interval_lower_bound,
   prediction_interval_upper_bound
 FROM ML.FORECAST(
-  MODEL `pdm-ceasa.silver.modelo_serie_arima`,
+  MODEL `silver.modelo_serie_arima`,
   STRUCT(60 AS horizon, 0.95 AS confidence_level)
 )
 ORDER BY produto, classe, forecast_timestamp;
@@ -47,7 +47,7 @@ FROM (
     classe,
     MAX(DATE(forecast_timestamp)) AS data_final_serie
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.silver.modelo_serie_arima`,
+    MODEL `silver.modelo_serie_arima`,
     STRUCT(60 AS horizon, 0.95 AS confidence_level)
   )
   GROUP BY produto, classe

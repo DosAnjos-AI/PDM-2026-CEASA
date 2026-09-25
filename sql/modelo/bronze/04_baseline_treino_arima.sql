@@ -19,7 +19,7 @@
 --
 -- CREATE OR REPLACE MODEL: idempotente, reexecutar substitui o modelo anterior.
 
-CREATE OR REPLACE MODEL `pdm-ceasa.baseline.modelo_serie_arima`
+CREATE OR REPLACE MODEL `baseline.modelo_serie_arima`
 OPTIONS (
   model_type = 'ARIMA_PLUS',
   time_series_timestamp_col = 'data',
@@ -32,4 +32,4 @@ SELECT
   data,
   CONCAT(produto, '|', CAST(classe AS STRING)) AS serie_id,
   preco_comum
-FROM `pdm-ceasa.bronze.cotacoes`;
+FROM `bronze.cotacoes`;

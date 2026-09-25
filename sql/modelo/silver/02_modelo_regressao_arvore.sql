@@ -33,7 +33,7 @@
 -- CREATE OR REPLACE MODEL retreina ao rodar; para validar sintaxe sem
 -- treinar, usar "bq query --dry_run --use_legacy_sql=false < este_arquivo".
 
-CREATE OR REPLACE MODEL `pdm-ceasa.silver.modelo_regressao_arvore`
+CREATE OR REPLACE MODEL `silver.modelo_regressao_arvore`
 OPTIONS (
   model_type = 'BOOSTED_TREE_REGRESSOR',
   input_label_cols = ['alvo'],
@@ -52,5 +52,5 @@ SELECT
   lag_365,
   lag_730,
   alvo
-FROM `pdm-ceasa.silver.dados_treino`
+FROM `silver.dados_treino`
 WHERE data <= '2025-12-31';

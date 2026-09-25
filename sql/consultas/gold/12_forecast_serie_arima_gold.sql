@@ -18,7 +18,7 @@ WITH forecast_semanal AS (
     produto, classe,
     MAX(DATE(forecast_timestamp)) AS data_final_serie
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.gold.modelo_serie_arima_semanal`,
+    MODEL `gold.modelo_serie_arima_semanal`,
     STRUCT(90 AS horizon, 0.95 AS confidence_level)
   )
   GROUP BY produto, classe
@@ -39,7 +39,7 @@ WITH forecast_mensal AS (
     produto, classe,
     MAX(DATE(forecast_timestamp)) AS data_final_serie
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.gold.modelo_serie_arima_mensal`,
+    MODEL `gold.modelo_serie_arima_mensal`,
     STRUCT(24 AS horizon, 0.95 AS confidence_level)
   )
   GROUP BY produto, classe

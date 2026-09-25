@@ -15,12 +15,12 @@ SELECT
   AVG(ABS(alvo - predicted_alvo)) AS mae,
   AVG(ABS(alvo - predicted_alvo) / NULLIF(alvo, 0)) AS erro_percentual_medio
 FROM ML.PREDICT(
-  MODEL `pdm-ceasa.silver.modelo_regressao_linear`,
+  MODEL `silver.modelo_regressao_linear`,
   (
     SELECT
       produto, classe, grupo, ano, mes, dia_semana,
       lag_7, lag_14, lag_30, lag_365, lag_730, alvo
-    FROM `pdm-ceasa.silver.dados_treino`
+    FROM `silver.dados_treino`
     WHERE data >= '2026-01-01'
   )
 )

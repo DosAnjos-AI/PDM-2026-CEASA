@@ -4,7 +4,7 @@
 -- modelo ja treinado -- nao ha CREATE MODEL nesta consulta, nenhuma tabela
 -- e criada ou alterada.
 --
--- Fonte do vetor: pdm-ceasa.bronze.cotacoes (mesma fonte de
+-- Fonte do vetor: bronze.cotacoes (mesma fonte de
 -- sql/modelo/bronze/01_baseline_dados_treino.sql). Vetor do baseline =
 -- produto, classe, mes, dia_semana -- SEM preco e SEM lag (conferido no
 -- script de treino, que so seleciona essas 4 colunas + alvo; "data" nao
@@ -44,7 +44,7 @@ DECLARE p_produto_bronze STRING;
 
 SET p_produto_bronze = (
   SELECT ANY_VALUE(produto)
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
   WHERE classe = p_classe
     AND REPLACE(
           LOWER(REGEXP_REPLACE(NORMALIZE(REGEXP_REPLACE(TRIM(produto), r' +', ' '), NFD), r'\pM', '')),
@@ -54,7 +54,7 @@ SET p_produto_bronze = (
 
 WITH data_base_encontrada AS (
   SELECT MAX(data) AS data_base_usada
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
   WHERE produto = p_produto_bronze
     AND classe = p_classe
     AND data <= p_data_base_alvo
@@ -84,7 +84,7 @@ SELECT
   END AS observacao
 FROM vetor AS v
 LEFT JOIN ML.PREDICT(
-  MODEL `pdm-ceasa.baseline.modelo_regressao_linear`,
+  MODEL `baseline.modelo_regressao_linear`,
   (
     SELECT
       p_produto_bronze AS produto,

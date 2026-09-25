@@ -40,7 +40,7 @@ DECLARE p_serie_id STRING;
 
 SET p_produto_bronze = (
   SELECT ANY_VALUE(produto)
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
   WHERE classe = p_classe
     AND REPLACE(
           LOWER(REGEXP_REPLACE(NORMALIZE(REGEXP_REPLACE(TRIM(produto), r' +', ' '), NFD), r'\pM', '')),
@@ -51,13 +51,13 @@ SET p_serie_id = CONCAT(p_produto_bronze, '|', CAST(p_classe AS STRING));
 
 WITH ultima_observacao AS (
   SELECT MAX(data) AS data_base_usada
-  FROM `pdm-ceasa.bronze.cotacoes`
+  FROM `bronze.cotacoes`
   WHERE produto = p_produto_bronze AND classe = p_classe
 ),
 forecast AS (
   SELECT *
   FROM ML.FORECAST(
-    MODEL `pdm-ceasa.baseline.modelo_serie_arima`,
+    MODEL `baseline.modelo_serie_arima`,
     STRUCT(4 AS horizon, 0.95 AS confidence_level)
   )
   WHERE serie_id = p_serie_id

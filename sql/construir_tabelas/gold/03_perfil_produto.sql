@@ -20,13 +20,13 @@
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo
 -- resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.gold.perfil_produto` AS
+CREATE OR REPLACE TABLE `gold.perfil_produto` AS
 WITH cutoff_semanal AS (
   SELECT
     produto,
     classe,
     MIN(data_inicio_semana) AS data_corte
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
   WHERE NOT interpolado
   GROUP BY produto, classe
 )
@@ -43,7 +43,7 @@ SELECT
   DATE_DIFF(MAX(s.data), MIN(s.data), MONTH) AS n_meses,
   ROUND(DATE_DIFF(MAX(s.data), MIN(s.data), MONTH) / 12, 1) AS n_anos,
   COUNT(*) AS n_pregoes
-FROM `pdm-ceasa.silver.cotacoes` AS s
+FROM `silver.cotacoes` AS s
 JOIN cutoff_semanal AS c
   ON c.produto = s.produto AND c.classe = s.classe
 WHERE s.data >= c.data_corte

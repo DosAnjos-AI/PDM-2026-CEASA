@@ -11,19 +11,19 @@ SELECT
   COUNTIF(interpolado) AS linhas_interpoladas,
   COUNTIF(NOT interpolado) AS linhas_reais,
   COUNT(DISTINCT CONCAT(produto, '|', CAST(classe AS STRING))) AS pares
-FROM `pdm-ceasa.gold.analitica_semanal`;
+FROM `gold.analitica_semanal`;
 
 -- distribuicao de n_pregoes por semana (apenas semanas com pregao real)
 SELECT
   MIN(n_pregoes) AS min_n_pregoes,
   APPROX_QUANTILES(n_pregoes, 2)[OFFSET(1)] AS mediana_n_pregoes,
   MAX(n_pregoes) AS max_n_pregoes
-FROM `pdm-ceasa.gold.analitica_semanal`
+FROM `gold.analitica_semanal`
 WHERE NOT interpolado;
 
 -- distribuicao completa de n_pregoes (achado se aparecer 7+ pregoes)
 SELECT n_pregoes, COUNT(*) AS quantidade
-FROM `pdm-ceasa.gold.analitica_semanal`
+FROM `gold.analitica_semanal`
 WHERE NOT interpolado
 GROUP BY n_pregoes
 ORDER BY n_pregoes;
@@ -33,7 +33,7 @@ WITH indexado AS (
   SELECT
     produto, classe, data_inicio_semana, interpolado,
     ROW_NUMBER() OVER (PARTITION BY produto, classe ORDER BY data_inicio_semana) AS idx
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
 ),
 somente_interpolado AS (
   SELECT
@@ -59,7 +59,7 @@ WITH indexado AS (
     interpolado,
     ROW_NUMBER() OVER (PARTITION BY produto, classe ORDER BY data_inicio_semana) AS idx,
     COUNT(*) OVER (PARTITION BY produto, classe) AS total
-  FROM `pdm-ceasa.gold.analitica_semanal`
+  FROM `gold.analitica_semanal`
 )
 SELECT COUNT(*) AS violacoes_ponta
 FROM indexado

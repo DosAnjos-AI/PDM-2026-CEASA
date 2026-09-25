@@ -6,7 +6,7 @@ SELECT
   COUNT(DISTINCT grupo) AS grupos_distintos,
   COUNT(DISTINCT produto) AS produtos_distintos,
   COUNT(DISTINCT embalagem) AS embalagens_distintas
-FROM `pdm-ceasa.silver.stg_02_normalizado`;
+FROM `silver.stg_02_normalizado`;
 
 -- Nulo novo: CAST(NUMERIC AS FLOAT64) só produz nulo se a origem já era
 -- nula, então basta comparar a contagem agregada de nulos antes/depois.
@@ -17,7 +17,7 @@ SELECT
   COUNTIF(preco_maximo IS NULL) AS nulos_preco_maximo,
   COUNTIF(preco_minimo IS NULL) AS nulos_preco_minimo,
   COUNTIF(preco_kg IS NULL) AS nulos_preco_kg
-FROM `pdm-ceasa.silver.stg_01_deduplicado`
+FROM `silver.stg_01_deduplicado`
 UNION ALL
 SELECT
   'depois' AS etapa,
@@ -26,4 +26,4 @@ SELECT
   COUNTIF(preco_maximo IS NULL),
   COUNTIF(preco_minimo IS NULL),
   COUNTIF(preco_kg IS NULL)
-FROM `pdm-ceasa.silver.stg_02_normalizado`;
+FROM `silver.stg_02_normalizado`;

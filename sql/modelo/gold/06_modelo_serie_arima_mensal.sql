@@ -36,7 +36,7 @@
 -- CREATE OR REPLACE MODEL retreina ao rodar; para validar sintaxe sem
 -- treinar, usar "bq query --dry_run --use_legacy_sql=false < este_arquivo".
 
-CREATE OR REPLACE MODEL `pdm-ceasa.gold.modelo_serie_arima_mensal`
+CREATE OR REPLACE MODEL `gold.modelo_serie_arima_mensal`
 OPTIONS (
   model_type = 'ARIMA_PLUS',
   time_series_timestamp_col = 'data_inicio_mes',
@@ -53,4 +53,4 @@ SELECT
   produto,
   classe,
   media_preco_comum
-FROM `pdm-ceasa.gold.analitica_mensal`;
+FROM `gold.analitica_mensal`;

@@ -16,14 +16,14 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.baseline.metricas` AS
+CREATE OR REPLACE TABLE `baseline.metricas` AS
 WITH eval_linear AS (
   SELECT *
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.baseline.modelo_regressao_linear`,
+    MODEL `baseline.modelo_regressao_linear`,
     (
       SELECT produto, classe, mes, dia_semana, alvo
-      FROM `pdm-ceasa.baseline.dados_treino`
+      FROM `baseline.dados_treino`
       WHERE data >= '2026-01-01'
     )
   )
@@ -31,10 +31,10 @@ WITH eval_linear AS (
 eval_arvore AS (
   SELECT *
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.baseline.modelo_regressao_arvore`,
+    MODEL `baseline.modelo_regressao_arvore`,
     (
       SELECT produto, classe, mes, dia_semana, alvo
-      FROM `pdm-ceasa.baseline.dados_treino`
+      FROM `baseline.dados_treino`
       WHERE data >= '2026-01-01'
     )
   )
@@ -56,4 +56,4 @@ SELECT * FROM regressao_long
 UNION ALL
 SELECT * FROM arima_long;
 
-SELECT * FROM `pdm-ceasa.baseline.metricas` ORDER BY modelo, metrica;
+SELECT * FROM `baseline.metricas` ORDER BY modelo, metrica;

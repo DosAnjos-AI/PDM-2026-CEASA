@@ -28,20 +28,20 @@ SELECT
   aic,
   variance,
   error_message
-FROM ML.ARIMA_EVALUATE(MODEL `pdm-ceasa.silver.modelo_serie_arima`)
+FROM ML.ARIMA_EVALUATE(MODEL `silver.modelo_serie_arima`)
 ORDER BY produto, classe;
 
 -- Quantas series a silver.cotacoes tem versus quantas o ARIMA conseguiu
 -- avaliar (com e sem erro registrado em error_message).
 WITH series_fonte AS (
   SELECT COUNT(DISTINCT CONCAT(produto, '|', CAST(classe AS STRING))) AS total_series
-  FROM `pdm-ceasa.silver.cotacoes`
+  FROM `silver.cotacoes`
 ),
 series_avaliadas AS (
   SELECT
     COUNT(*) AS total_avaliadas,
     COUNTIF(error_message IS NOT NULL) AS com_erro,
     COUNTIF(error_message IS NULL) AS sem_erro
-  FROM ML.ARIMA_EVALUATE(MODEL `pdm-ceasa.silver.modelo_serie_arima`)
+  FROM ML.ARIMA_EVALUATE(MODEL `silver.modelo_serie_arima`)
 )
 SELECT * FROM series_fonte, series_avaliadas;

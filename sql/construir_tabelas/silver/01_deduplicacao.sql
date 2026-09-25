@@ -10,15 +10,15 @@
 --
 -- CREATE OR REPLACE TABLE: idempotente, reexecutar produz o mesmo resultado.
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_01a_dedup_total` AS
+CREATE OR REPLACE TABLE `silver.stg_01a_dedup_total` AS
 SELECT DISTINCT
   data, ano, mes, dia, grupo, categoria, codigo, produto, embalagem,
   qtd_kg, classe, preco_comum, preco_maximo, preco_minimo, preco_kg,
   layout, arquivo
-FROM `pdm-ceasa.bronze.cotacoes`;
+FROM `bronze.cotacoes`;
 
-CREATE OR REPLACE TABLE `pdm-ceasa.silver.stg_01_deduplicado` AS
+CREATE OR REPLACE TABLE `silver.stg_01_deduplicado` AS
 SELECT DISTINCT
   data, ano, mes, dia, grupo, categoria, codigo, produto, embalagem,
   qtd_kg, classe, preco_comum, preco_maximo, preco_minimo, preco_kg
-FROM `pdm-ceasa.silver.stg_01a_dedup_total`;
+FROM `silver.stg_01a_dedup_total`;

@@ -45,7 +45,7 @@
 -- CREATE OR REPLACE MODEL retreina ao rodar; para validar sintaxe sem
 -- treinar, usar "bq query --dry_run --use_legacy_sql=false < este_arquivo".
 
-CREATE OR REPLACE MODEL `pdm-ceasa.silver.modelo_serie_arima`
+CREATE OR REPLACE MODEL `silver.modelo_serie_arima`
 OPTIONS (
   model_type = 'ARIMA_PLUS',
   time_series_timestamp_col = 'data',
@@ -62,4 +62,4 @@ SELECT
   produto,
   classe,
   preco_comum
-FROM `pdm-ceasa.silver.cotacoes`;
+FROM `silver.cotacoes`;

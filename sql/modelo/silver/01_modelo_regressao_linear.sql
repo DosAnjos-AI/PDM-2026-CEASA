@@ -27,7 +27,7 @@
 -- desenho do modelo nao reproduz a metrica exata; variacao sem mudanca de
 -- desenho e ruido do treino, nao regressao do modelo.
 
-CREATE OR REPLACE MODEL `pdm-ceasa.silver.modelo_regressao_linear`
+CREATE OR REPLACE MODEL `silver.modelo_regressao_linear`
 OPTIONS (
   model_type = 'LINEAR_REG',
   input_label_cols = ['alvo'],
@@ -49,5 +49,5 @@ SELECT
   lag_365,
   lag_730,
   alvo
-FROM `pdm-ceasa.silver.dados_treino`
+FROM `silver.dados_treino`
 WHERE data <= '2025-12-31';

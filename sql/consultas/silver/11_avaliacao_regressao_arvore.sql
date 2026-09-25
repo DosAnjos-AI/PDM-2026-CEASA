@@ -1,6 +1,6 @@
 -- Avaliacao do modelo silver.modelo_regressao_arvore na particao de teste
 -- (data >= 2026-01-01, nunca vista no treino) e comparacao lado a lado com
--- o baseline ja treinado sobre a bronze crua (pdm-ceasa.baseline.metricas).
+-- o baseline ja treinado sobre a bronze crua (baseline.metricas).
 -- Faz: ML.EVALUATE + RMSE calculado (RMSE nao e retornado nativamente por
 -- ML.EVALUATE); segunda consulta junta essas metricas com as do baseline.
 -- Nao faz: nao persiste nenhuma tabela.
@@ -17,12 +17,12 @@ SELECT
   mean_squared_error,
   SQRT(mean_squared_error) AS rmse
 FROM ML.EVALUATE(
-  MODEL `pdm-ceasa.silver.modelo_regressao_arvore`,
+  MODEL `silver.modelo_regressao_arvore`,
   (
     SELECT
       produto, classe, grupo, ano, mes, dia_semana,
       lag_7, lag_14, lag_30, lag_365, lag_730, alvo
-    FROM `pdm-ceasa.silver.dados_treino`
+    FROM `silver.dados_treino`
     WHERE data >= '2026-01-01'
   )
 );
@@ -34,12 +34,12 @@ WITH silver_eval AS (
     r2_score,
     mean_absolute_error
   FROM ML.EVALUATE(
-    MODEL `pdm-ceasa.silver.modelo_regressao_arvore`,
+    MODEL `silver.modelo_regressao_arvore`,
     (
       SELECT
         produto, classe, grupo, ano, mes, dia_semana,
         lag_7, lag_14, lag_30, lag_365, lag_730, alvo
-      FROM `pdm-ceasa.silver.dados_treino`
+      FROM `silver.dados_treino`
       WHERE data >= '2026-01-01'
     )
   )
@@ -49,7 +49,7 @@ baseline_eval AS (
     'baseline.modelo_regressao_arvore' AS modelo,
     MAX(IF(metrica = 'r2_score', valor, NULL)) AS r2_score,
     MAX(IF(metrica = 'mean_absolute_error', valor, NULL)) AS mean_absolute_error
-  FROM `pdm-ceasa.baseline.metricas`
+  FROM `baseline.metricas`
   WHERE modelo = 'modelo_regressao_arvore'
   GROUP BY modelo
 )
@@ -61,5 +61,5 @@ SELECT * FROM silver_eval;
 -- lags a arvore usa contra o que a linear ponderou (ENABLE_GLOBAL_EXPLAIN
 -- no treino torna esta chamada valida).
 SELECT *
-FROM ML.GLOBAL_EXPLAIN(MODEL `pdm-ceasa.silver.modelo_regressao_arvore`)
+FROM ML.GLOBAL_EXPLAIN(MODEL `silver.modelo_regressao_arvore`)
 ORDER BY attribution DESC;

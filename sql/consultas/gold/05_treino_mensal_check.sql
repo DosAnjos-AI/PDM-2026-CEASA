@@ -16,7 +16,7 @@ WITH base AS (
   SELECT
     produto, classe, ano, mes, media_preco_comum,
     ano * 12 + mes AS chave_mes
-  FROM `pdm-ceasa.gold.analitica_mensal`
+  FROM `gold.analitica_mensal`
 ),
 origem AS (
   SELECT
@@ -58,14 +58,14 @@ SELECT
   COUNT(DISTINCT CONCAT(produto, '|', CAST(classe AS STRING))) AS pares,
   MIN(ano) AS ano_min,
   MAX(ano) AS ano_max
-FROM `pdm-ceasa.gold.treino_mensal`;
+FROM `gold.treino_mensal`;
 
 -- produtos da Silver que saem da tabela de treino
 SELECT produto
 FROM (
-  SELECT DISTINCT produto FROM `pdm-ceasa.silver.cotacoes`
+  SELECT DISTINCT produto FROM `silver.cotacoes`
   EXCEPT DISTINCT
-  SELECT DISTINCT produto FROM `pdm-ceasa.gold.treino_mensal`
+  SELECT DISTINCT produto FROM `gold.treino_mensal`
 )
 ORDER BY produto;
 
@@ -75,8 +75,8 @@ WITH prova AS (
   SELECT
     t.lag_1m,
     a.media_preco_comum AS preco_mes_anterior
-  FROM `pdm-ceasa.gold.treino_mensal` AS t
-  JOIN `pdm-ceasa.gold.analitica_mensal` AS a
+  FROM `gold.treino_mensal` AS t
+  JOIN `gold.analitica_mensal` AS a
     ON a.produto = t.produto
    AND a.classe = t.classe
    AND a.ano = EXTRACT(YEAR FROM DATE_SUB(DATE(t.ano, t.mes, 1), INTERVAL 1 MONTH))

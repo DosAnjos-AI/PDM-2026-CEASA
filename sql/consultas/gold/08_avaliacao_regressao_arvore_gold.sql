@@ -12,12 +12,12 @@ SELECT
   mean_squared_error,
   SQRT(mean_squared_error) AS rmse
 FROM ML.EVALUATE(
-  MODEL `pdm-ceasa.gold.modelo_regressao_arvore_semanal`,
+  MODEL `gold.modelo_regressao_arvore_semanal`,
   (
     SELECT
       produto, classe, grupo, isoyear, isoweek,
       lag_1s, lag_2s, lag_4s, lag_52s, lag_104s, alvo
-    FROM `pdm-ceasa.gold.treino_semanal`
+    FROM `gold.treino_semanal`
     WHERE data_inicio_semana > '2025-12-31'
   )
 );
@@ -30,12 +30,12 @@ SELECT
   mean_squared_error,
   SQRT(mean_squared_error) AS rmse
 FROM ML.EVALUATE(
-  MODEL `pdm-ceasa.gold.modelo_regressao_arvore_mensal`,
+  MODEL `gold.modelo_regressao_arvore_mensal`,
   (
     SELECT
       produto, classe, grupo, ano, mes,
       lag_1m, lag_12m, lag_24m, alvo
-    FROM `pdm-ceasa.gold.treino_mensal`
+    FROM `gold.treino_mensal`
     WHERE DATE(ano, mes, 1) > '2025-12-31'
   )
 );

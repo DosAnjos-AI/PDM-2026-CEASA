@@ -50,10 +50,12 @@ import argparse
 import collections
 import csv
 import difflib
+import os
 import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import astuple, dataclass, fields
@@ -183,13 +185,22 @@ def detectar_layout(texto: str) -> str:
     return "desconhecido"
 
 
+# O OCR e a parte pesada: rasterizar a 300 DPI e rodar o tesseract consome
+# muita CPU. Rodar varios em paralelo num conteiner de poucos vCPU faz cada
+# chamada passar de 10 segundos para mais de 10 minutos, ate estourar o
+# timeout. Por isso o OCR tem um limite proprio, menor que o de threads.
+_OCR_PARALELO = int(os.environ.get("CEASA_OCR_PARALELO", "2"))
+_TRAVA_OCR = threading.Semaphore(_OCR_PARALELO)
+
+
 def ocr_do_pdf(caminho: Path, dpi: int = 300, idioma: str = "por") -> str:
     """Rasteriza o PDF e passa cada pagina no tesseract.
 
     Usado nos PDFs que nao tem camada de texto (sao desenho vetorial puro:
     pdffonts nao lista nenhuma fonte e nao ha operadores Tj/TJ).
     """
-    with tempfile.TemporaryDirectory() as tmp:
+    ambiente = {**os.environ, "OMP_THREAD_LIMIT": "1"}
+    with _TRAVA_OCR, tempfile.TemporaryDirectory() as tmp:
         prefixo = Path(tmp) / "pg"
         r = subprocess.run(
             ["pdftoppm", "-r", str(dpi), "-gray", "-png", str(caminho), str(prefixo)],
@@ -203,7 +214,7 @@ def ocr_do_pdf(caminho: Path, dpi: int = 300, idioma: str = "por") -> str:
             # --psm 6 = bloco unico de texto, que e o que preserva as linhas
             r = subprocess.run(
                 ["tesseract", str(png), "stdout", "-l", idioma, "--psm", "6"],
-                capture_output=True, text=True, timeout=600,
+                capture_output=True, text=True, timeout=600, env=ambiente,
             )
             if r.returncode != 0:
                 raise RuntimeError(f"tesseract falhou: {r.stderr.strip()[:200]}")

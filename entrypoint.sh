@@ -21,13 +21,20 @@ ANO_INICIAL="${ANO_INICIAL:-$(date +%Y)}"
 # (2022-04-08 e 2023-12-05), que nao sao cotacao diaria.
 FALHAS_ESPERADAS="${FALHAS_ESPERADAS:-2}"
 
-# Ordem dos .sql identica a documentada no README.md. sql/modelo/ fica de fora
-# de proposito: cada arquivo la tem CREATE OR REPLACE MODEL e retreina ao rodar.
+# Ordem dos .sql identica a documentada no README.md.
+#
+# Duas pastas ficam de fora do ciclo diario, pelo mesmo motivo: dependem de
+# treino de modelo, que nao e rotina.
+#   sql/modelo/     -> cada arquivo tem CREATE OR REPLACE MODEL e retreina.
+#   .../metricas/   -> avalia os 12 modelos com ML.EVALUATE. Sem os modelos
+#                      treinados ela falha com "Not found: Model"; e com eles,
+#                      so muda quando ha retreino. Rodar todo dia nao agrega.
+#
+# Treino e metricas rodam a parte, quando ha intencao explicita de retreinar.
 DIRETORIOS_SQL=(
     "sql/construir_tabelas/bronze"
     "sql/construir_tabelas/silver"
     "sql/construir_tabelas/gold"
-    "sql/construir_tabelas/metricas"
 )
 
 cd "$(dirname "${BASH_SOURCE[0]}")"

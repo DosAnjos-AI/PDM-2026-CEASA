@@ -4,6 +4,7 @@
 *.key
 credentials*.json
 
-# saida dos scripts de coleta (ingestao/ceasa_*.py)
+# saida dos scripts de coleta (ingestao/*.py)
 cotacoes/
+cotacoes_*/
 __pycache__/

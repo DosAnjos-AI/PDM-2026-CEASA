@@ -9,17 +9,18 @@ percorre o calendario dia a dia, para cada categoria.
 
 Duas etapas, ambas idempotentes:
   1. coleta: guarda a tabela HTML de cada (data, categoria) em <bruto>/AAAA/MM/.
-     Consultas sem dado vao para <bruto>/vazios.txt e nao sao repetidas, salvo
-     as dos ultimos --revisar-dias (o site pode publicar com atraso).
+     Consultas sem dado vao para <bruto>/vazios.txt e nao sao repetidas. Tudo
+     dos ultimos --revisar-dias e consultado de novo, inclusive o que ja foi
+     baixado: o site publica com atraso e completa tabelas ja publicadas.
   2. extracao: le todas as tabelas guardadas e gera o CSV no esquema comum.
 
 Historico disponivel no site: a partir de meados de 2022 (jul/2022 ainda vazio,
 out/2022 ja com dados).
 
 Uso:
-    python3 ingestao/ceagesp_sp.py                          # 2022-07-01 ate hoje
-    python3 ingestao/ceagesp_sp.py --inicio 2026-09-01
-    python3 ingestao/ceagesp_sp.py --so-extrair             # refaz o CSV sem acessar o site
+    python3 ingestao/scraping/ceagesp_sp.py                          # 2022-07-01 ate hoje
+    python3 ingestao/scraping/ceagesp_sp.py --inicio 2026-09-01
+    python3 ingestao/scraping/ceagesp_sp.py --so-extrair             # refaz o CSV sem acessar o site
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from coleta_comum import DIR_DADOS, Cliente, confere, escreve_csv, grava_atomico, limpa, linha, numero_br  # noqa: E402
+from comum import DIR_DADOS, Cliente, grava_atomico, grava_se_conferido, limpa, linha, numero_br  # noqa: E402
 
 # ------------------------------------------------------------ configuracao
 
@@ -100,14 +101,15 @@ def coletar(cli: Cliente, bruto: Path, inicio: date, fim: date, revisar_dias: in
     caminho_vazios = bruto / "vazios.txt"
     vazios = le_vazios(caminho_vazios)
     limite_revisao = (date.today() - timedelta(days=revisar_dias)).isoformat()
-    # consultas vazias recentes voltam para a fila
+    # a janela recente volta inteira para a fila: vazios e tambem o ja baixado
     vazios = {(d, g) for d, g in vazios if d < limite_revisao}
 
     pendentes = []
     dia = inicio
     while dia <= fim:
         for g in grupos:
-            if not arquivo_de(bruto, dia, g).exists() and (dia.isoformat(), g) not in vazios:
+            recente = dia.isoformat() >= limite_revisao
+            if recente or (not arquivo_de(bruto, dia, g).exists() and (dia.isoformat(), g) not in vazios):
                 pendentes.append((dia, g))
         dia += timedelta(days=1)
     print(f"Consultas pendentes: {len(pendentes)} ({inicio} a {fim})")
@@ -132,7 +134,7 @@ def coletar(cli: Cliente, bruto: Path, inicio: date, fim: date, revisar_dias: in
                 print(f"  [{i}/{len(pendentes)}] {novos} com dado, {erros} erro(s)")
                 grava_vazios(caminho_vazios, vazios)  # progresso salvo para retomar
     grava_vazios(caminho_vazios, vazios)
-    print(f"Coleta: {novos} tabela(s) nova(s), {erros} erro(s).")
+    print(f"Coleta: {novos} tabela(s) gravada(s), {erros} erro(s).")
     return erros
 
 
@@ -165,9 +167,7 @@ def extrair(bruto: Path, saida: Path) -> int:
     arquivos = sorted(bruto.rglob("*.html"))
     linhas = [l for a in arquivos for l in extrai_tabela(a, bruto)]
     print(f"\nExtracao: {len(arquivos)} tabela(s)")
-    escreve_csv(saida, linhas)
-    print(f"CSV: {saida.resolve()}")
-    return confere(linhas, FONTE)
+    return grava_se_conferido(saida, linhas, FONTE)
 
 
 def main() -> int:
@@ -176,7 +176,7 @@ def main() -> int:
     p.add_argument("--fim", type=date.fromisoformat, default=date.today(), help="AAAA-MM-DD (padrao: hoje)")
     p.add_argument("-b", "--bruto", type=Path, default=BRUTO_PADRAO, help="pasta das tabelas brutas")
     p.add_argument("-s", "--saida", type=Path, default=SAIDA_PADRAO, help="CSV de saida")
-    p.add_argument("--revisar-dias", type=int, default=7, help="reconsulta vazios desta janela (padrao: 7)")
+    p.add_argument("--revisar-dias", type=int, default=7, help="consulta de novo tudo desta janela (padrao: 7)")
     p.add_argument("--delay", type=float, default=0.5, help="segundos entre requisicoes (padrao: 0.5)")
     p.add_argument("--workers", type=int, default=4, help="requisicoes simultaneas (padrao: 4)")
     p.add_argument("--so-extrair", action="store_true", help="nao acessa o site, so refaz o CSV")
@@ -185,8 +185,13 @@ def main() -> int:
     if args.inicio > args.fim:
         raise SystemExit("--inicio posterior a --fim.")
     erros = 0
-    if not args.so_extrair:
-        erros = coletar(Cliente(args.delay), args.bruto, args.inicio, args.fim, args.revisar_dias, args.workers)
+    try:
+        if not args.so_extrair:
+            erros = coletar(Cliente(args.delay), args.bruto, args.inicio, args.fim, args.revisar_dias, args.workers)
+    except requests.RequestException as e:
+        # site fora do ar: o CSV ainda e gerado com o que ja foi baixado
+        print(f"! coleta interrompida por falha de rede: {e}", file=sys.stderr)
+        erros = 1
     falha = extrair(args.bruto, args.saida)
     return 2 if erros else falha
 

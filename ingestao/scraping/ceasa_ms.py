@@ -23,9 +23,9 @@ Dependencias: requests, beautifulsoup4, xlrd (.xls) e openpyxl (.xlsx);
 msoffcrypto-tool opcional, so para planilhas com protecao contra gravacao.
 
 Uso:
-    python3 ingestao/ceasa_ms.py                   # 2021 ate hoje
-    python3 ingestao/ceasa_ms.py --start-year 2026
-    python3 ingestao/ceasa_ms.py --so-extrair
+    python3 ingestao/scraping/ceasa_ms.py                   # 2021 ate hoje
+    python3 ingestao/scraping/ceasa_ms.py --start-year 2026
+    python3 ingestao/scraping/ceasa_ms.py --so-extrair
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from coleta_comum import DIR_DADOS, Cliente, confere, escreve_csv, grava_atomico, limpa, linha, numero_br  # noqa: E402
+from comum import DIR_DADOS, Cliente, grava_atomico, grava_se_conferido, http_404, limpa, linha, numero_br  # noqa: E402
 
 # ------------------------------------------------------------ configuracao
 
@@ -97,7 +97,7 @@ def planilhas_do_ano(cli: Cliente, ano: int) -> dict[int, str] | None:
 
 
 def coletar(cli: Cliente, bruto: Path, inicio: int, fim: int) -> int:
-    contagem = {"baixado": 0, "atualizado": 0, "existente": 0, "erro": 0}
+    contagem = {"baixado": 0, "atualizado": 0, "existente": 0, "indisponivel": 0, "erro": 0}
     for ano in range(inicio, fim + 1):
         meses = planilhas_do_ano(cli, ano)
         if meses is None:
@@ -118,6 +118,12 @@ def coletar(cli: Cliente, bruto: Path, inicio: int, fim: int) -> int:
                     estado = "baixado"
                 conteudo = cli.get(url).content
             except requests.RequestException as e:
+                if http_404(e):
+                    # o proprio site publica o link quebrado (ex.: nov/2023, mar/2025):
+                    # nao ha o que coletar, e repetir o erro a cada execucao esconderia falha nova
+                    contagem["indisponivel"] += 1
+                    print(f"  aviso: {ano}-{mes:02d} indisponivel na fonte (404): {url}")
+                    continue
                 contagem["erro"] += 1
                 print(f"  ! {ano}-{mes:02d} {url}: {e}", file=sys.stderr)
                 continue
@@ -205,7 +211,7 @@ def data_da_aba(linhas: list[list], datemode_xls: bool) -> date | None:
     return None
 
 
-def extrai_planilha(caminho: Path, bruto: Path, descartes: list[str]) -> list[dict]:
+def extrai_planilha(caminho: Path, bruto: Path, descartes: list[str], falhas: list[str]) -> list[dict]:
     ano, mes = int(caminho.parent.name), int(caminho.stem)
     rel = caminho.relative_to(bruto).as_posix()
     hoje = date.today()
@@ -214,6 +220,9 @@ def extrai_planilha(caminho: Path, bruto: Path, descartes: list[str]) -> list[di
         todas = list(abas(caminho))
     except PlanilhaProtegida as e:
         descartes.append(f"{rel}: {e}")
+        return []
+    except Exception as e:  # xlrd, openpyxl e msoffcrypto tem hierarquias de erro proprias
+        falhas.append(f"{rel}: planilha ilegivel ({e.__class__.__name__}: {e})")
         return []
     for nome, linhas in todas:
         if not nome.strip().isdigit():
@@ -259,18 +268,30 @@ def extrai_planilha(caminho: Path, bruto: Path, descartes: list[str]) -> list[di
     return saida
 
 
-def extrair(bruto: Path, saida: Path) -> int:
+def extrair(bruto: Path, saida: Path, falhas_esperadas: int) -> int:
     arquivos = sorted(p for p in bruto.rglob("*") if p.suffix.lower() in EXTENSOES)
+    # o mesmo mes em .xls e .xlsx (site trocou o formato) duplicaria as linhas do mes
+    por_mes: dict[tuple[str, str], list[str]] = {}
+    for a in arquivos:
+        por_mes.setdefault((a.parent.name, a.stem), []).append(a.relative_to(bruto).as_posix())
+    repetidos = [str(v) for v in por_mes.values() if len(v) > 1]
+    if repetidos:
+        raise SystemExit("Mes com mais de uma planilha no bruto (apague a antiga): " + "; ".join(repetidos))
+
     descartes: list[str] = []
-    linhas = [l for a in arquivos for l in extrai_planilha(a, bruto, descartes)]
+    falhas: list[str] = []
+    linhas = [l for a in arquivos for l in extrai_planilha(a, bruto, descartes, falhas)]
     print(f"\nExtracao: {len(arquivos)} planilha(s)")
-    if descartes:
-        print(f"Abas fora do CSV: {len(descartes)}")
-        for d in descartes:
-            print(f"  - {d}")
-    escreve_csv(saida, linhas)
-    print(f"CSV: {saida.resolve()}")
-    return confere(linhas, FONTE)
+    for titulo, lista in (("Abas fora do CSV", descartes), ("Planilhas ilegiveis", falhas)):
+        if lista:
+            print(f"{titulo}: {len(lista)}")
+            for d in lista:
+                print(f"  - {d}")
+    falha = grava_se_conferido(saida, linhas, FONTE)
+    if len(falhas) > falhas_esperadas:
+        print(f"{len(falhas)} planilha(s) ilegivel(is), acima das {falhas_esperadas} esperada(s).", file=sys.stderr)
+        return 1
+    return falha
 
 
 def main() -> int:
@@ -281,12 +302,19 @@ def main() -> int:
     p.add_argument("-s", "--saida", type=Path, default=SAIDA_PADRAO, help="CSV de saida")
     p.add_argument("--delay", type=float, default=0.5, help="segundos entre requisicoes (padrao: 0.5)")
     p.add_argument("--so-extrair", action="store_true", help="nao acessa o site, so refaz o CSV")
+    p.add_argument("--falhas-esperadas", type=int, default=0, metavar="N",
+                   help="planilhas ilegiveis toleradas antes de sair com erro (padrao: 0)")
     args = p.parse_args()
 
     erros = 0
-    if not args.so_extrair:
-        erros = coletar(Cliente(args.delay), args.bruto, args.start_year, args.end_year)
-    falha = extrair(args.bruto, args.saida)
+    try:
+        if not args.so_extrair:
+            erros = coletar(Cliente(args.delay), args.bruto, args.start_year, args.end_year)
+    except requests.RequestException as e:
+        # site fora do ar: o CSV ainda e gerado com o que ja foi baixado
+        print(f"! coleta interrompida por falha de rede: {e}", file=sys.stderr)
+        erros = 1
+    falha = extrair(args.bruto, args.saida, args.falhas_esperadas)
     return 2 if erros else falha
 
 

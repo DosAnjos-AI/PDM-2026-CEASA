@@ -1,6 +1,7 @@
-#!/usr/bin/env python3
 """
-Coletor dos boletins diarios da CEASA-MG e da CEASA-ES.
+Logica compartilhada dos coletores de sedes que usam o sistema Scriptcase
+(ceasa_mg.py e ceasa_es.py). Nao e executado direto: cada sede chama
+`main(cfg)` com a propria configuracao.
 
 Os dois estados usam o mesmo sistema (Scriptcase), com uma tela de filtro
 (mercado + data) que leva ao "Boletim Completo" em HTML. O fluxo da tela e
@@ -20,15 +21,12 @@ data pedida. Por isso o boletim e sempre pedido sem cookie (cliente proprio).
 Duas etapas, ambas idempotentes:
   1. coleta: guarda a tabela de cada (mercado, data) em <bruto>/<cod>/AAAA/MM/.
      Boletim que volta "Registros nao encontrados" vai para <bruto>/vazios.txt.
-  2. extracao: le as tabelas guardadas e gera um CSV por estado.
+     Tudo dos ultimos --revisar-dias e pedido de novo, inclusive o que ja foi
+     baixado: o ES publicou os pescados de 05/10/2026 horas depois do resto.
+  2. extracao: le as tabelas guardadas e gera o CSV da sede.
 
-Historico disponivel no site: MG desde out/2021, ES desde nov/2021.
-
-Uso:
-    python3 ingestao/ceasa_mg_es.py                          # MG e ES, tudo
-    python3 ingestao/ceasa_mg_es.py --estado es --inicio 2026-01-01
-    python3 ingestao/ceasa_mg_es.py --estado mg --mercados 214,218
-    python3 ingestao/ceasa_mg_es.py --so-extrair
+`cfg` de cada sede: fonte (rotulo no CSV), filtro (URL da tela de filtro),
+boletim (URL do boletim completo), bruto e saida (caminhos padrao).
 """
 
 from __future__ import annotations
@@ -45,34 +43,14 @@ import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from coleta_comum import DIR_DADOS, Cliente, confere, escreve_csv, grava_atomico, limpa, linha, numero_br  # noqa: E402
+from comum import Cliente, grava_atomico, grava_se_conferido, limpa, linha, numero_br  # noqa: E402
 
 # ------------------------------------------------------------ configuracao
 
-ESTADOS = {
-    "mg": {
-        "fonte": "CEASA-MG",
-        "filtro": "https://minas1.ceasa.mg.gov.br/detec/filtro_boletim/filtro_boletim_mob.php",
-        "boletim": "https://minas1.ceasa.mg.gov.br/detec/boletim_completo/boletim_completo.php",
-    },
-    "es": {
-        "fonte": "CEASA-ES",
-        "filtro": "http://200.198.51.71/detec/filtro_boletim_es/filtro_boletim_es.php",
-        "boletim": "http://200.198.51.71/detec/boletim_completo_es/boletim_completo_es.php",
-    },
-}
 # colunas do grid do boletim, identificadas pela classe CSS de cada celula
 CAMPOS_GRID = ["prdnom", "embdesresu", "pboprcmin", "pboprccomum", "pboprcmax", "mersit"]
 RE_DATA_BOLETIM = re.compile(r"Data(?: Pesquisada)?:\s*(\d{2}/\d{2}/\d{4})")
 SEM_REGISTRO = "Registros não encontrados"
-
-
-def bruto_de(estado: str) -> Path:
-    return DIR_DADOS / f"cotacoes_{estado}"
-
-
-def saida_de(estado: str) -> Path:
-    return DIR_DADOS / f"cotacoes_{estado}.csv"
 
 
 def arquivo_de(bruto: Path, cod: str, dia: date) -> Path:
@@ -139,14 +117,13 @@ def grava_vazios(caminho: Path, vazios: set[tuple[str, str]]) -> None:
     grava_atomico(caminho, "".join(f"{c}\t{d}\n" for c, d in sorted(vazios)).encode("utf-8"))
 
 
-def coletar(cli: Cliente, cli_boletim: Cliente, estado: str, bruto: Path, inicio: date, fim: date,
+def coletar(cli: Cliente, cli_boletim: Cliente, cfg: dict, bruto: Path, inicio: date, fim: date,
             so_mercados: set[str] | None, revisar_dias: int, workers: int) -> int:
-    cfg = ESTADOS[estado]
     lista, campos = mercados(cli, cfg)
     if so_mercados:
         desconhecidos = so_mercados - lista.keys()
         if desconhecidos:
-            raise SystemExit(f"Mercado(s) inexistente(s) em {estado}: {sorted(desconhecidos)}. Validos: {lista}")
+            raise SystemExit(f"Mercado(s) inexistente(s) em {cfg['fonte']}: {sorted(desconhecidos)}. Validos: {lista}")
         lista = {c: n for c, n in lista.items() if c in so_mercados}
 
     caminho_vazios = bruto / "vazios.txt"
@@ -156,7 +133,8 @@ def coletar(cli: Cliente, cli_boletim: Cliente, estado: str, bruto: Path, inicio
     pendentes = []
     for cod, nome in lista.items():
         datas = [d for d in datas_do_mercado(cli, cfg, campos, cod) if inicio <= d <= fim]
-        faltam = [d for d in datas if not arquivo_de(bruto, cod, d).exists() and (cod, d.isoformat()) not in vazios]
+        faltam = [d for d in datas if d.isoformat() >= limite_revisao
+                  or (not arquivo_de(bruto, cod, d).exists() and (cod, d.isoformat()) not in vazios)]
         print(f"  {cfg['fonte']} {cod} {nome}: {len(datas)} data(s) no periodo, {len(faltam)} a baixar")
         pendentes += [(cod, nome, d) for d in faltam]
 
@@ -180,7 +158,7 @@ def coletar(cli: Cliente, cli_boletim: Cliente, estado: str, bruto: Path, inicio
                 print(f"  [{i}/{len(pendentes)}] {novos} boletim(ns), {erros} erro(s)")
                 grava_vazios(caminho_vazios, vazios)  # progresso salvo para retomar
     grava_vazios(caminho_vazios, vazios)
-    print(f"Coleta {cfg['fonte']}: {novos} boletim(ns) novo(s), {erros} erro(s).")
+    print(f"Coleta {cfg['fonte']}: {novos} boletim(ns) gravado(s), {erros} erro(s).")
     return erros
 
 
@@ -208,45 +186,37 @@ def extrai_boletim(caminho: Path, bruto: Path, fonte: str) -> list[dict]:
     return linhas
 
 
-def extrair(estado: str, bruto: Path, saida: Path) -> int:
-    fonte = ESTADOS[estado]["fonte"]
+def extrair(cfg: dict, bruto: Path, saida: Path) -> int:
+    fonte = cfg["fonte"]
     arquivos = sorted(bruto.rglob("*.html"))
     linhas = [l for a in arquivos for l in extrai_boletim(a, bruto, fonte)]
     print(f"\nExtracao {fonte}: {len(arquivos)} boletim(ns)")
-    escreve_csv(saida, linhas)
-    print(f"CSV: {saida.resolve()}")
-    return confere(linhas, fonte)
+    return grava_se_conferido(saida, linhas, fonte)
 
 
-def main() -> int:
-    p = argparse.ArgumentParser(description="Coleta os boletins diarios da CEASA-MG e CEASA-ES e gera CSV.")
-    p.add_argument("--estado", choices=[*ESTADOS, "todos"], default="todos")
+def main(cfg: dict) -> int:
+    p = argparse.ArgumentParser(description=f"Coleta os boletins diarios da {cfg['fonte']} e gera CSV.")
     p.add_argument("--mercados", type=lambda s: set(s.split(",")), default=None,
-                   help="codigos separados por virgula (padrao: todos do estado)")
+                   help="codigos separados por virgula (padrao: todos)")
     p.add_argument("--inicio", type=date.fromisoformat, default=date(2000, 1, 1), help="AAAA-MM-DD")
     p.add_argument("--fim", type=date.fromisoformat, default=date.today(), help="AAAA-MM-DD (padrao: hoje)")
-    p.add_argument("-b", "--bruto", type=Path, default=None, help="pasta dos brutos (padrao: cotacoes_<estado>)")
-    p.add_argument("-s", "--saida", type=Path, default=None, help="CSV de saida (padrao: cotacoes_<estado>.csv)")
-    p.add_argument("--revisar-dias", type=int, default=7, help="reconsulta vazios desta janela (padrao: 7)")
+    p.add_argument("-b", "--bruto", type=Path, default=cfg["bruto"], help="pasta dos boletins brutos")
+    p.add_argument("-s", "--saida", type=Path, default=cfg["saida"], help="CSV de saida")
+    p.add_argument("--revisar-dias", type=int, default=7, help="pede de novo tudo desta janela (padrao: 7)")
     p.add_argument("--delay", type=float, default=0.5, help="segundos entre requisicoes (padrao: 0.5)")
     p.add_argument("--workers", type=int, default=4, help="requisicoes simultaneas (padrao: 4)")
     p.add_argument("--so-extrair", action="store_true", help="nao acessa o site, so refaz o CSV")
     args = p.parse_args()
 
-    estados = list(ESTADOS) if args.estado == "todos" else [args.estado]
-    if len(estados) > 1 and (args.bruto or args.saida or args.mercados):
-        raise SystemExit("--bruto, --saida e --mercados exigem um --estado especifico.")
-
-    erros = falhas = 0
-    for estado in estados:
-        bruto = args.bruto or bruto_de(estado)
-        saida = args.saida or saida_de(estado)
+    erros = 0
+    try:
         if not args.so_extrair:
-            erros += coletar(Cliente(args.delay), Cliente(args.delay, cookies=False), estado, bruto, args.inicio, args.fim,
-                             args.mercados, args.revisar_dias, args.workers)
-        falhas += extrair(estado, bruto, saida)
-    return 2 if erros else (1 if falhas else 0)
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+            # boletim sempre sem cookie: ver o cuidado no topo do modulo
+            erros = coletar(Cliente(args.delay), Cliente(args.delay, cookies=False), cfg, args.bruto,
+                            args.inicio, args.fim, args.mercados, args.revisar_dias, args.workers)
+    except requests.RequestException as e:
+        # site fora do ar: o CSV ainda e gerado com o que ja foi baixado
+        print(f"! coleta interrompida por falha de rede: {e}", file=sys.stderr)
+        erros = 1
+    falha = extrair(cfg, args.bruto, args.saida)
+    return 2 if erros else falha

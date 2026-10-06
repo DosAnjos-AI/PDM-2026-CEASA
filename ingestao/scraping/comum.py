@@ -1,11 +1,11 @@
 """
-Pecas compartilhadas pelos coletores de outras CEASAs (SP, MS, MG, ES).
+Pecas compartilhadas pelos coletores de ingestao/scraping/ (SP, MS, MG, ES, SC).
 
 Todos produzem um CSV com o mesmo esquema (COLUNAS), para que a carga na
 Bronze seja igual para qualquer fonte. Coluna que a fonte nao publica fica
 vazia; nenhum valor e inferido.
 
-Dependencias: requests e beautifulsoup4 (mesmas do ceasa_scraper.py).
+Dependencias: requests e beautifulsoup4 (mesmas do ingestao/ceasa_scraper.py).
 """
 
 from __future__ import annotations
@@ -24,14 +24,14 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 # Pasta onde ficam brutos e CSVs; padrao: raiz do repositorio (nada disso e versionado)
-DIR_DADOS = Path(os.environ.get("CEASA_DADOS", Path(__file__).resolve().parents[1]))
+DIR_DADOS = Path(os.environ.get("CEASA_DADOS", Path(__file__).resolve().parents[2]))
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 
 # Esquema unico de saida, na ordem das colunas do CSV
 COLUNAS = [
     "data", "ano", "mes", "dia", "fonte", "mercado", "grupo", "produto",
-    "classificacao", "embalagem", "qtd_kg", "preco_minimo", "preco_comum",
+    "classificacao", "tipo", "origem", "embalagem", "qtd_kg", "preco_minimo", "preco_comum",
     "preco_maximo", "situacao", "arquivo",
 ]
 
@@ -129,13 +129,14 @@ def escreve_csv(caminho: Path, linhas: list[dict]) -> None:
 
 
 def linha(data, fonte: str, mercado: str, grupo: str, produto: str, arquivo: str, ordem: int,
-          classificacao: str = "", embalagem: str = "", qtd_kg=None, preco_minimo=None,
+          classificacao: str = "", tipo: str = "", origem: str = "", embalagem: str = "", qtd_kg=None, preco_minimo=None,
           preco_comum=None, preco_maximo=None, situacao: str = "") -> dict:
     """Monta um registro no esquema COLUNAS. `ordem` preserva a ordem da fonte dentro do arquivo."""
     return {
         "data": data.isoformat(), "ano": data.year, "mes": data.month, "dia": data.day,
         "fonte": fonte, "mercado": mercado, "grupo": limpa(grupo), "produto": limpa(produto),
-        "classificacao": limpa(classificacao), "embalagem": limpa(embalagem), "qtd_kg": qtd_kg,
+        "classificacao": limpa(classificacao), "tipo": limpa(tipo), "origem": limpa(origem),
+        "embalagem": limpa(embalagem), "qtd_kg": qtd_kg,
         "preco_minimo": preco_minimo, "preco_comum": preco_comum, "preco_maximo": preco_maximo,
         "situacao": limpa(situacao), "arquivo": arquivo, "_ordem": ordem,
     }
@@ -162,3 +163,18 @@ def confere(linhas: list[dict], rotulo: str) -> int:
     if precos:
         print(f"  preco_comum: min {min(precos)} max {max(precos)}")
     return 1 if sem_chave else 0
+
+
+def grava_se_conferido(caminho: Path, linhas: list[dict], rotulo: str) -> int:
+    """Confere e so entao substitui o CSV: saida reprovada nao sobrescreve um CSV bom."""
+    if confere(linhas, rotulo):
+        print(f"{rotulo}: conferencia reprovada, CSV NAO gravado ({caminho} anterior mantido).", file=sys.stderr)
+        return 1
+    escreve_csv(caminho, linhas)
+    print(f"CSV: {caminho.resolve()}")
+    return 0
+
+
+def http_404(e: Exception) -> bool:
+    """Link publicado pela propria fonte que nao existe: defeito da fonte, nao falha da coleta."""
+    return isinstance(e, requests.HTTPError) and e.response is not None and e.response.status_code == 404

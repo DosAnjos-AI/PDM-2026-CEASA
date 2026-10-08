@@ -64,6 +64,10 @@ ANO_INICIAL_PADRAO = 2020  # primeira pagina de ano do site
 BRUTO_PADRAO = DIR_DADOS / "cotacoes_sc"
 SAIDA_PADRAO = DIR_DADOS / "cotacoes_sc.csv"
 ITENS_POR_PAGINA = 20
+# PDFs publicados que nao sao o boletim diario: nao sao baixados nem extraidos
+IDS_IGNORADOS = {
+    1261: "Relatorio de Divulgacao de 25/01/2021 (25 produtos, so preco comum), layout fora do boletim diario",
+}
 
 RE_ANO = re.compile(r"/cotacao-de-precos/(\d{4})(?:-\d+)?/?$")
 RE_MES = re.compile(r"/(\d{2})-[a-z]+(?:-\d+)?/?$")
@@ -175,6 +179,10 @@ def coletar(cli: Cliente, bruto: Path, inicio: int, fim: int, workers: int) -> i
             vistos.update(d.id for d in achados)
             docs += achados
             print(f"  {ano}-{mes:02d}: {len(achados):3d} PDF(s)")
+    for d in docs:
+        if d.id in IDS_IGNORADOS:
+            print(f"  aviso: id {d.id} ignorado: {IDS_IGNORADOS[d.id]}")
+    docs = [d for d in docs if d.id not in IDS_IGNORADOS]
     pendentes = [d for d in docs if not (bruto / d.destino_rel).exists()]
     print(f"Total: {len(docs)} PDF(s), {len(pendentes)} a baixar")
 
@@ -336,7 +344,8 @@ def extrai_pdf(pdf: Path, bruto: Path) -> tuple[date, list[dict], list[str], lis
 def extrair(bruto: Path, saida: Path, workers: int, falhas_esperadas: int) -> int:
     if shutil.which("pdftotext") is None:
         raise SystemExit("pdftotext nao encontrado no PATH (pacote poppler-utils).")
-    pdfs = sorted(bruto.rglob("*.pdf"), key=lambda p: int(p.stem))
+    # bruto baixado antes de o id entrar em IDS_IGNORADOS tambem fica de fora
+    pdfs = sorted((p for p in bruto.rglob("*.pdf") if int(p.stem) not in IDS_IGNORADOS), key=lambda p: int(p.stem))
     ids: dict[str, list[str]] = {}
     for pdf in pdfs:
         ids.setdefault(pdf.stem, []).append(pdf.relative_to(bruto).as_posix())

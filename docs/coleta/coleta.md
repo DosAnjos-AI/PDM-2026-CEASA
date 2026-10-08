@@ -145,7 +145,6 @@ CSV. O coletor da CEASA-GO continua em `ingestao/ceasa_scraper.py` +
 
 | Script | Sede | Formato na origem | Histórico no site |
 |---|---|---|---|
-| `ceagesp_sp.py` | CEAGESP — Entreposto da Capital | Tabela HTML devolvida por POST (categoria + data) | meados de 2022 → |
 | `ceasa_ms.py` | CEASA-MS — Campo Grande | Uma planilha `.xls` por mês, uma aba por dia | 2021 → |
 | `ceasa_mg.py` | CEASA-MG — 7 mercados | Boletim HTML do sistema Scriptcase | out/2021 → (Barbacena tem também um bloco de 2006) |
 | `ceasa_es.py` | CEASA-ES — 3 mercados | Boletim HTML do sistema Scriptcase | 2010 → (varia por mercado) |
@@ -171,7 +170,6 @@ Rodam igual em Linux e Windows (no Windows, o `pdftotext` precisa estar no PATH 
 ## Uso
 
 ```bash
-python3 ingestao/scraping/ceagesp_sp.py              # -> cotacoes_sp/ e cotacoes_sp.csv
 python3 ingestao/scraping/ceasa_ms.py                # -> cotacoes_ms/ e cotacoes_ms.csv
 python3 ingestao/scraping/ceasa_mg.py                # -> cotacoes_mg/ e cotacoes_mg.csv
 python3 ingestao/scraping/ceasa_es.py                # -> cotacoes_es/ e cotacoes_es.csv
@@ -184,9 +182,9 @@ Saídas vão para a raiz do repositório, ou para a pasta em `CEASA_DADOS` se a
 variável estiver definida. Nada disso é versionado (`.gitignore`: `*.csv`,
 `cotacoes_*/`).
 
-Volume de uma carga completa, com o padrão `--delay 0.5`: SP ~9 mil
-requisições (calendário × 7 categorias), MG ~4,5 mil, ES ~3 mil, SC ~1,5 mil
-PDFs, MS ~70. Consultas sem dado (SP, MG, ES) ficam em `<bruto>/vazios.txt` e
+Volume de uma carga completa, com o padrão `--delay 0.5`: MG ~4,5 mil
+requisições, ES ~3 mil, SC ~1,5 mil PDFs, MS ~70. Consultas sem dado (MG, ES)
+ficam em `<bruto>/vazios.txt` e
 não são repetidas. Tudo dos últimos `--revisar-dias` (padrão 7) é consultado
 de novo a cada execução, **inclusive o que já foi baixado**: o site publica
 com atraso e completa boletins já publicados (ver "Cuidados").
@@ -217,18 +215,18 @@ trocado por um reprovado.
 origem, embalagem, qtd_kg, preco_minimo, preco_comum, preco_maximo, situacao,
 arquivo`
 
-| Coluna | SP | MS | MG / ES | SC |
-|---|---|---|---|---|
-| `mercado` | ENTREPOSTO DA CAPITAL | CAMPO GRANDE | nome do mercado no filtro | unidade impressa no PDF (São José) |
-| `grupo` | categoria (FRUTAS, LEGUMES…) | seção da aba (FRUTAS, HORTALIÇAS…) | vazio | vazio |
-| `produto` | "Produto" | "Produto" | "Produtos" | "Produto Variedade" |
-| `classificacao` | "Classificação" | vazio | vazio | "Classificação" |
-| `tipo` | vazio | vazio | vazio | "Tipo" (Normal, Convenci, Organico) |
-| `origem` | vazio | vazio | vazio | "Origem" (Nacional, Importado) |
-| `embalagem` | "Uni/Peso" | "Embalagem" | "Embalagem" | "Embalagem" |
-| `qtd_kg` | "Quilo" — peso da embalagem | vazio | vazio | "Conv. Kg" |
-| `situacao` | vazio | FRA/EST/FIR/AUS… | ME/MFR/MFI… | vazio |
-| `arquivo` | tabela bruta | `AAAA/MM.xls#aba` | boletim bruto | `AAAA/MM/<id>.pdf` |
+| Coluna | MS | MG / ES | SC |
+|---|---|---|---|
+| `mercado` | CAMPO GRANDE | nome do mercado no filtro | unidade impressa no PDF (São José) |
+| `grupo` | seção da aba (FRUTAS, HORTALIÇAS…) | vazio | vazio |
+| `produto` | "Produto" | "Produtos" | "Produto Variedade" |
+| `classificacao` | vazio | vazio | "Classificação" |
+| `tipo` | vazio | vazio | "Tipo" (Normal, Convenci, Organico) |
+| `origem` | vazio | vazio | "Origem" (Nacional, Importado) |
+| `embalagem` | "Embalagem" | "Embalagem" | "Embalagem" |
+| `qtd_kg` | vazio | vazio | "Conv. Kg" |
+| `situacao` | FRA/EST/FIR/AUS… | ME/MFR/MFI… | vazio |
+| `arquivo` | `AAAA/MM.xls#aba` | boletim bruto | `AAAA/MM/<id>.pdf` |
 
 ## Cuidados — verificados na fonte
 
@@ -247,11 +245,6 @@ arquivo`
   Cachoeiro de Itapemirim jul/2015 → ago/2018 (parou). MG — todos desde
   out/2021; Barbacena tem ainda um bloco isolado de 2006 (245 linhas);
   Uberaba sem boletim desde 16/09/2026.
-- **SP: a página de cotações da CEAGESP fica instável sob carga.** Em
-  06/10/2026, depois de ~1.200 consultas a 5/s (`--delay 0.2`), `/cotacoes/`
-  passou a não responder (timeout de 60 s) enquanto a página inicial seguia
-  normal. Para a carga inicial do SP, usar o `--delay` padrão (0,5) ou maior;
-  o coletor retoma de onde parou.
 - **MS repete dias.** As 31 abas de cada mês vêm preenchidas, inclusive fim de
   semana e dias sem pregão, que repetem a aba anterior (em ago/2026, 20 das 31
   abas eram cópia da anterior). O CSV reproduz a fonte; descartar repetição é
@@ -259,7 +252,7 @@ arquivo`
 - **MS: abas com data errada ficam fora do CSV e são listadas.** Template do
   ano anterior não atualizado (ex.: set/2026 só tem os dias 1–2 preenchidos;
   as demais abas dizem 01/09/2025), abas "31" em mês de 30 dias e um ano
-  digitado como 2219. Na última execução: 48 abas.
+  digitado como 2219. Na última execução: 49 abas.
 - **MS: 2 links quebrados no próprio site** — nov/2023 (404) e "Março" de
   2025, que aponta para `ABRIL.xls` (404). Esses meses não existem; saem como
   aviso a cada execução, sem afetar o código de saída.
@@ -269,8 +262,6 @@ arquivo`
 - **MG traz itens que não são hortifruti** (`COMBUSTIVEL ALCOOL`, flores), e
   há boletins parciais (ex.: Uberlândia em 25/09/2026, 3 linhas). Filtrar é
   papel da Silver.
-- **SP**: o formulário só lista as ~2 semanas mais recentes; o histórico é
-  obtido consultando dia a dia, o que explica o volume de requisições.
 - **SC: extração por coordenada, não por texto.** Em registros com a
   classificação em duas linhas ("Especial" / "Escovada"), o `pdftotext
   -layout` joga o preço máximo numa linha e os demais em outra. O coletor usa
@@ -294,14 +285,11 @@ arquivo`
 
 | Sede | Recorte | Linhas | Datas | Sem data/produto | min ≤ comum ≤ max violado |
 |---|---|---|---|---|---|
-| SP | 21–30/09/2026 | 2.778 | 5 | 0 | 0 |
 | MG | 24–30/09/2026 (6 mercados) | 1.821 | 5 | 0 | 0 |
 | ES | 24–30/09/2026 | 765 | 5 | 0 | 0 |
-| MS | histórico completo, 2021-01 → 2026-09 | 332.844 | 1.991 | 0 | 1.551 (amostra conferida: está assim na planilha) |
-| SC | 2026 completo (191 PDFs) + 1 PDF por ano de 2020 a 2025 | 48.230 (2026) | 191 | 0 | 41 (amostra conferida: comum 0,00 no PDF) |
+| MS | histórico completo, 2021-01 → 2026-10-02 (68 planilhas) | 337.855 | 2.021 | 0 | 1.551 (amostra conferida: está assim na planilha) |
+| SC | histórico completo, 2020-01 → 2026-10-06 (1.695 PDFs) | 454.197 | 1.694 | 0 | 126 (todas com comum 0,00 no PDF) |
 
-- SP: as 5 datas coincidem com a lista que o próprio site publica; ABACATE
-  AVOCADO em 30/09/2026 = 9,76 / 11,07 / 12,4, igual ao site.
 - MG: contagem por boletim igual à de consultas isoladas (BH 25/09 = 241,
   28/09 = 223).
 - SC: em 2026, as 48.039 linhas que o `pdftotext -layout` lê sem quebra saem
@@ -309,12 +297,12 @@ arquivo`
   classificação em duas linhas, conferidos à mão. Nas amostras de 2020–2025,
   as únicas divergências contra o modo texto são produto com variedade
   ("Abobora Comum"), em que o modo texto separa errado.
-- Reexecução sobre os mesmos brutos gera CSV idêntico (`cmp`) em SP, MG, MS e SC.
-- Depois da mudança para `ingestao/scraping/`, SP, MG, ES e MS foram rodados
+- Reexecução sobre os mesmos brutos gera CSV idêntico (`cmp`) em MG, MS e SC.
+- Depois da mudança para `ingestao/scraping/`, MG, ES e MS foram rodados
   de novo, com os mesmos números.
 - Bateria de testes antes do commit (06/10/2026), por sede: período recente e
   início do histórico; reexecução sem download novo e CSV idêntico;
-  `--so-extrair` idêntico; boletins de SP, MG e ES baixados de novo por
+  `--so-extrair` idêntico; boletins de MG e ES baixados de novo por
   código independente e comparados linha a linha (9 casos, 100% iguais); duas
   abas do MS lidas direto com `xlrd` (iguais); SC 2020 inteiro contra o modo
   texto (66.127 iguais; as 778 diferenças são todas produto + variedade,
@@ -330,5 +318,12 @@ arquivo`
   - ES: 244.587 linhas, 3 mercados; todas as 2.261 datas coletadas
     (2.255 + 6 vazios, 5 reconsultados e confirmados); 24 boletins sorteados
     (2010–2026) idênticos ao site.
-- Carga completa do SP interrompida pela instabilidade da CEAGESP (ver
-  "Cuidados"); a do SC (2021–2025) ainda não foi executada.
+- Carga completa de MS e SC (07/10/2026): MS em 45 s, SC em 16,5 min;
+  `--so-extrair` gera CSV idêntico (`cmp`) nas duas. No SC, 3 links do site
+  dão 404 (mar–abr/2023). O PDF de id 1261, um "Relatório de Divulgação de
+  Cotações" de 25/01/2021 com 25 produtos e só o preço comum, não é o boletim
+  diário: está em `IDS_IGNORADOS` no `ceasa_sc.py`, não é baixado nem extraído
+  (o dia fica sem dado).
+- CEAGESP (SP) retirada em 07/10/2026: a consulta exige um POST por dia e
+  por categoria (~11 mil requisições) e a página de cotações deixava de
+  responder sob carga, o que impediu a carga completa.

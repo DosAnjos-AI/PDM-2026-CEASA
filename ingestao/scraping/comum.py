@@ -1,5 +1,5 @@
 """
-Pecas compartilhadas pelos coletores de ingestao/scraping/ (SP, MS, MG, ES, SC).
+Pecas compartilhadas pelos coletores de ingestao/scraping/ (MS, MG, ES, SC).
 
 Todos produzem um CSV com o mesmo esquema (COLUNAS), para que a carga na
 Bronze seja igual para qualquer fonte. Coluna que a fonte nao publica fica

@@ -9,12 +9,25 @@
 # Cloud Shell).
 #
 # Sedes (bruto em DIR_BRUTO/<uf>/, organizado por ano e mes dentro dela):
-#   CEASA-GO          go/          -> raw/cotacoes_site.csv            -> bronze.cotacoes
-#   CEASA-MS/SC/MG/ES ms/ sc/ mg/ es/ -> outras_ceasas/cotacoes_<uf>.csv -> bronze.cotacoes_outras
+#   CEASA-GO  go/  -> raw/cotacoes_site.csv -> bronze.ceasa_go (e bronze.cotacoes)
+#   CEASA-MS  ms/  -> csv/ceasa_ms.csv      -> bronze.ceasa_ms
+#   CEASA-SC  sc/  -> csv/ceasa_sc.csv      -> bronze.ceasa_sc
+#   CEASA-MG  mg/  -> csv/ceasa_mg.csv      -> bronze.ceasa_mg
+#   CEASA-ES  es/  -> csv/ceasa_es.csv      -> bronze.ceasa_es
+# Cada CSV e refeito com TODOS os brutos da sede, nao so os do dia, e
+# bronze.ceasa_<uf> recebe dele so o necessario, por MERGE na coluna arquivo:
+# boletim ausente entra, boletim com conteudo diferente e substituido, o resto
+# nao e tocado. Assim a tabela acompanha o bucket mesmo depois de uma execucao
+# que baixou e nao carregou.
+#
+# Conferencia de duas vias: csv/manifesto_brutos.csv lista todo bruto do
+# bucket; sql/consultas/bronze/05_ceasa_check.sql cruza essa lista com as
+# tabelas (bruto sem linha no BigQuery e linha no BigQuery sem bruto).
 #
 # Idempotente de ponta a ponta: coletor pula bruto existente, extrator e
 # deterministico, upload sobrescreve o mesmo objeto e todo .sql e
-# LOAD DATA OVERWRITE ou CREATE OR REPLACE.
+# LOAD DATA OVERWRITE, CREATE OR REPLACE ou MERGE que nao muda nada quando o
+# CSV e o mesmo.
 #
 # Falha ruidosa: set -e aborta no primeiro erro da CEASA-GO ou do BigQuery.
 # Uma outra sede que falha nao e enviada (o objeto anterior dela fica no
@@ -30,7 +43,7 @@ DIR_BRUTO="${DIR_BRUTO:-/mnt/dados}"
 # Pasta dos CSVs gerados; sao refeitos do zero a cada execucao.
 DIR_CSV="${DIR_CSV:-/tmp}"
 OBJETO_CSV_GO="${OBJETO_CSV_GO:-raw/cotacoes_site.csv}"
-PREFIXO_OUTRAS="${PREFIXO_OUTRAS:-outras_ceasas}"
+PREFIXO_CSV="${PREFIXO_CSV:-csv}"
 # Primeiro ano que o scraper da CEASA-GO percorre. Na carga inicial use 2019.
 # No ciclo diario o padrao e o ano anterior, para que a virada de ano nao perca
 # boletim de dezembro publicado com atraso; o que ja existe e pulado. As outras
@@ -39,8 +52,12 @@ ANO_INICIAL_GO="${ANO_INICIAL_GO:-$(( $(date +%Y) - 1 ))}"
 # Falhas permanentes e conhecidas da CEASA-GO: os 2 boletins semanais
 # comparativos (2022-04-08 e 2023-12-05), que nao sao cotacao diaria.
 FALHAS_ESPERADAS_GO="${FALHAS_ESPERADAS_GO:-2}"
-# Sedes coletadas por ingestao/scraping/ceasa_<uf>.py.
-SEDES_OUTRAS=(${SEDES_OUTRAS:-ms sc mg es})
+# Sedes alem da GO, coletadas por ingestao/scraping/ceasa_<uf>.py.
+SEDES=(${SEDES:-ms sc mg es})
+# Extensoes do bruto de cada sede, as mesmas que o extrator dela le; definem o
+# que entra no manifesto.
+declare -A EXTENSOES_BRUTO=([go]="pdf" [ms]="xls xlsx" [sc]="pdf" [mg]="html" [es]="html")
+OBJETO_MANIFESTO="${OBJETO_MANIFESTO:-${PREFIXO_CSV}/manifesto_brutos.csv}"
 
 # Ordem dos .sql identica a documentada no README.md.
 #
@@ -59,7 +76,12 @@ DIRETORIOS_SQL=(
 cd "$(dirname "${BASH_SOURCE[0]}")"
 mkdir -p "${DIR_BRUTO}" "${DIR_CSV}"
 
-echo "== 1/4 CEASA-GO: coleta (a partir de ${ANO_INICIAL_GO}), extracao e upload"
+# Configuracao incompleta aborta antes de baixar ou enviar qualquer coisa.
+for uf in go "${SEDES[@]}"; do
+    [[ -n "${EXTENSOES_BRUTO[${uf}]:-}" ]] || { echo "ERRO: sem extensao de bruto para ${uf} em EXTENSOES_BRUTO" >&2; exit 1; }
+done
+
+echo "== 1/5 CEASA-GO: coleta (a partir de ${ANO_INICIAL_GO}), extracao e upload"
 python3 ingestao/ceasa_scraper.py --start-year "${ANO_INICIAL_GO}" --out "${DIR_BRUTO}/go"
 python3 ingestao/ceasa_extrair.py --ocr \
         --entrada "${DIR_BRUTO}/go" \
@@ -67,9 +89,11 @@ python3 ingestao/ceasa_extrair.py --ocr \
         --falhas-esperadas "${FALHAS_ESPERADAS_GO}"
 gcloud storage cp "${DIR_CSV}/cotacoes_site.csv" "${BUCKET}/${OBJETO_CSV_GO}" --project="${PROJETO}"
 
-echo "== 2/4 outras sedes: ${SEDES_OUTRAS[*]}"
+echo "== 2/5 demais sedes: ${SEDES[*]}"
 sedes_com_falha=()
-for uf in "${SEDES_OUTRAS[@]}"; do
+# Sedes cujo CSV foi enviado nesta execucao; so elas tem a Bronze atualizada.
+sedes_enviadas=(go)
+for uf in "${SEDES[@]}"; do
     echo "-- ceasa_${uf}"
     csv="${DIR_CSV}/cotacoes_${uf}.csv"
     # O if desliga o set -e so para esta chamada: a falha de uma sede nao
@@ -77,19 +101,54 @@ for uf in "${SEDES_OUTRAS[@]}"; do
     if python3 "ingestao/scraping/ceasa_${uf}.py" \
             --bruto "${DIR_BRUTO}/${uf}" \
             --saida "${csv}"; then
-        gcloud storage cp "${csv}" "${BUCKET}/${PREFIXO_OUTRAS}/cotacoes_${uf}.csv" --project="${PROJETO}"
+        gcloud storage cp "${csv}" "${BUCKET}/${PREFIXO_CSV}/ceasa_${uf}.csv" --project="${PROJETO}"
+        sedes_enviadas+=("${uf}")
     else
         echo "ERRO: ceasa_${uf} falhou; o CSV anterior dela continua no bucket" >&2
         sedes_com_falha+=("${uf}")
     fi
 done
 
-echo "== 3/4 BigQuery"
+echo "== 3/5 manifesto dos brutos"
+# Lista todo bruto que existe agora, de todas as sedes, inclusive a que falhou
+# nesta execucao: a conferencia mostra entao o que ficou sem carregar.
+manifesto="${DIR_CSV}/manifesto_brutos.csv"
+echo "sede,caminho" > "${manifesto}"
+for uf in go "${SEDES[@]}"; do
+    # Sede que nunca baixou nada nao tem pasta; entra no manifesto com zero.
+    [[ -d "${DIR_BRUTO}/${uf}" ]] || { echo "-- ${uf}: 0 bruto(s)"; continue; }
+    filtro=()
+    for ext in ${EXTENSOES_BRUTO[${uf}]}; do
+        (( ${#filtro[@]} )) && filtro+=(-o)
+        filtro+=(-iname "*.${ext}")
+    done
+    # %P = caminho relativo a pasta da sede, o mesmo formato da coluna arquivo;
+    # -H segue a pasta da sede se ela for um link simbolico
+    find -H "${DIR_BRUTO}/${uf}" -type f \( "${filtro[@]}" \) -printf "${uf},%P\n" | LC_ALL=C sort >> "${manifesto}"
+    echo "-- ${uf}: $(grep -c "^${uf}," "${manifesto}" || true) bruto(s)"
+done
+# O CSV do manifesto nao usa aspas: cada linha tem exatamente uma virgula, a
+# que separa sede e caminho. Caminho com virgula ou aspas quebraria a carga.
+if tail -n +2 "${manifesto}" | grep -q -e '"' -e ',.*,'; then
+    echo "ERRO: caminho de bruto com virgula ou aspas em ${manifesto}" >&2
+    exit 1
+fi
+gcloud storage cp "${manifesto}" "${BUCKET}/${OBJETO_MANIFESTO}" --project="${PROJETO}"
+
+echo "== 4/5 BigQuery"
 for diretorio in "${DIRETORIOS_SQL[@]}"; do
     for arquivo in "${diretorio}"/*.sql; do
         # Aborta se o glob nao casar: diretorio vazio e erro de deploy, nao
         # motivo para pular silenciosamente uma camada inteira do pipeline.
         [[ -f "${arquivo}" ]] || { echo "ERRO: nenhum .sql em ${diretorio}" >&2; exit 1; }
+        # Script de uma sede (NN_ceasa_<uf>.sql) que nao foi coletada com
+        # sucesso agora e pulado: o CSV dela pode nem existir no bucket, e a
+        # tabela fica como estava em vez de derrubar o resto do pipeline.
+        if [[ "$(basename "${arquivo}")" =~ ^[0-9]+_ceasa_([a-z]{2})\.sql$ ]] \
+           && [[ " ${sedes_enviadas[*]} " != *" ${BASH_REMATCH[1]} "* ]]; then
+            echo "-- ${arquivo} (pulado: ceasa_${BASH_REMATCH[1]} nao foi enviada nesta execucao)"
+            continue
+        fi
         echo "-- ${arquivo}"
         # Os scripts da Bronze sao os unicos que precisam saber o bucket: eles
         # montam o LOAD DATA com EXECUTE IMMEDIATE a partir deste parametro. Os
@@ -103,7 +162,7 @@ for diretorio in "${DIRETORIOS_SQL[@]}"; do
     done
 done
 
-echo "== 4/4 resumo"
+echo "== 5/5 resumo"
 if (( ${#sedes_com_falha[@]} > 0 )); then
     echo "ERRO: sede(s) com falha, nao atualizada(s) no bucket: ${sedes_com_falha[*]}" >&2
     exit 1

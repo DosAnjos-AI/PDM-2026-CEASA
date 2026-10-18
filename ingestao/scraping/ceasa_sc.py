@@ -25,7 +25,10 @@ Duas etapas, ambas idempotentes:
   1. coleta: baixa os PDFs para <bruto>/AAAA/MM/<id>.pdf (ano/mes da pagina).
   2. extracao: le todos os PDFs e gera o CSV no esquema comum. Quando dois
      PDFs tem a mesma data interna, fica o de maior id (o mais recente) e os
-     demais sao listados.
+     demais sao listados. Com --carregados, so os PDFs que ainda nao estao na
+     Bronze e os dos ultimos --meses-recentes; a escolha por data vale entao
+     so entre os PDFs extraidos (um PDF antigo da mesma data, ja na Bronze,
+     continua la).
 
 Dependencias: requests, beautifulsoup4 e pdftotext (poppler-utils), o mesmo
 binario que o extrator da CEASA-GO ja usa.
@@ -54,7 +57,8 @@ import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from comum import DIR_DADOS, Cliente, grava_atomico, grava_se_conferido, http_404, limpa, linha, numero_br  # noqa: E402
+from comum import (DIR_DADOS, Cliente, argumentos_incrementais, grava_atomico, grava_se_conferido,  # noqa: E402
+                   grava_vazio, http_404, limpa, linha, numero_br, seleciona_pendentes)
 
 # ------------------------------------------------------------ configuracao
 
@@ -341,7 +345,8 @@ def extrai_pdf(pdf: Path, bruto: Path) -> tuple[date, list[dict], list[str], lis
     return dia, linhas, problemas, kg_divergente
 
 
-def extrair(bruto: Path, saida: Path, workers: int, falhas_esperadas: int) -> int:
+def extrair(bruto: Path, saida: Path, workers: int, falhas_esperadas: int,
+            carregados: Path | None = None, meses_recentes: int = 2) -> int:
     if shutil.which("pdftotext") is None:
         raise SystemExit("pdftotext nao encontrado no PATH (pacote poppler-utils).")
     # bruto baixado antes de o id entrar em IDS_IGNORADOS tambem fica de fora
@@ -352,6 +357,9 @@ def extrair(bruto: Path, saida: Path, workers: int, falhas_esperadas: int) -> in
     repetidos = [str(v) for v in ids.values() if len(v) > 1]
     if repetidos:
         raise SystemExit("Mesmo PDF (id) em mais de uma pasta do bruto: " + "; ".join(repetidos))
+    pdfs = seleciona_pendentes(pdfs, bruto, carregados, meses_recentes)
+    if not pdfs:
+        return grava_vazio(saida, FONTE)
     por_data: dict[date, list[tuple[int, list[dict]]]] = {}
     falhas: list[str] = []
     problemas: list[str] = []
@@ -411,6 +419,7 @@ def main() -> int:
     p.add_argument("--so-extrair", action="store_true", help="nao acessa o site, so refaz o CSV")
     p.add_argument("--falhas-esperadas", type=int, default=0, metavar="N",
                    help="PDFs sem dado tolerados antes de sair com erro (padrao: 0)")
+    argumentos_incrementais(p)
     args = p.parse_args()
 
     erros = 0
@@ -421,7 +430,8 @@ def main() -> int:
         # site fora do ar: o CSV ainda e gerado com o que ja foi baixado
         print(f"! coleta interrompida por falha de rede: {e}", file=sys.stderr)
         erros = 1
-    falha = extrair(args.bruto, args.saida, args.workers, args.falhas_esperadas)
+    falha = extrair(args.bruto, args.saida, args.workers, args.falhas_esperadas,
+                    args.carregados, args.meses_recentes)
     return 2 if erros else falha
 
 

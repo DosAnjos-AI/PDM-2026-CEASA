@@ -32,6 +32,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr-por \
     && rm -rf /var/lib/apt/lists/*
 
+# Sem isto o Python guarda a saida e so a solta no fim de cada script: o log
+# do Cloud Run fica mudo por minutos e todas as linhas chegam com o mesmo
+# horario, sem dar para medir cada fase.
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 COPY . /app
 RUN chmod +x /app/entrypoint.sh

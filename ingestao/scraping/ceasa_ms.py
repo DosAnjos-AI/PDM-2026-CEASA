@@ -10,7 +10,9 @@ Duas etapas, ambas idempotentes:
   1. coleta: baixa as planilhas para <bruto>/AAAA/MM.xls. A planilha do mes
      corrente cresce ao longo do mes, entao e baixada de novo sempre que o
      tamanho remoto (HEAD) difere do local.
-  2. extracao: le todas as abas e gera o CSV no esquema comum.
+  2. extracao: le todas as abas e gera o CSV no esquema comum. Com
+     --carregados, so as planilhas que ainda nao estao na Bronze e as dos
+     ultimos --meses-recentes (a do mes corrente sempre entra).
 
 Particularidade da fonte, verificada em ago/2026: todas as 31 abas existem e
 estao preenchidas, inclusive sabados, domingos e dias sem pregao, que repetem
@@ -43,7 +45,8 @@ import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from comum import DIR_DADOS, Cliente, grava_atomico, grava_se_conferido, http_404, limpa, linha, numero_br  # noqa: E402
+from comum import (DIR_DADOS, Cliente, argumentos_incrementais, grava_atomico, grava_se_conferido,  # noqa: E402
+                   grava_vazio, http_404, limpa, linha, numero_br, seleciona_pendentes)
 
 # ------------------------------------------------------------ configuracao
 
@@ -268,7 +271,8 @@ def extrai_planilha(caminho: Path, bruto: Path, descartes: list[str], falhas: li
     return saida
 
 
-def extrair(bruto: Path, saida: Path, falhas_esperadas: int) -> int:
+def extrair(bruto: Path, saida: Path, falhas_esperadas: int,
+            carregados: Path | None = None, meses_recentes: int = 2) -> int:
     arquivos = sorted(p for p in bruto.rglob("*") if p.suffix.lower() in EXTENSOES)
     # o mesmo mes em .xls e .xlsx (site trocou o formato) duplicaria as linhas do mes
     por_mes: dict[tuple[str, str], list[str]] = {}
@@ -277,6 +281,9 @@ def extrair(bruto: Path, saida: Path, falhas_esperadas: int) -> int:
     repetidos = [str(v) for v in por_mes.values() if len(v) > 1]
     if repetidos:
         raise SystemExit("Mes com mais de uma planilha no bruto (apague a antiga): " + "; ".join(repetidos))
+    arquivos = seleciona_pendentes(arquivos, bruto, carregados, meses_recentes)
+    if not arquivos:
+        return grava_vazio(saida, FONTE)
 
     descartes: list[str] = []
     falhas: list[str] = []
@@ -304,6 +311,7 @@ def main() -> int:
     p.add_argument("--so-extrair", action="store_true", help="nao acessa o site, so refaz o CSV")
     p.add_argument("--falhas-esperadas", type=int, default=0, metavar="N",
                    help="planilhas ilegiveis toleradas antes de sair com erro (padrao: 0)")
+    argumentos_incrementais(p)
     args = p.parse_args()
 
     erros = 0
@@ -314,7 +322,7 @@ def main() -> int:
         # site fora do ar: o CSV ainda e gerado com o que ja foi baixado
         print(f"! coleta interrompida por falha de rede: {e}", file=sys.stderr)
         erros = 1
-    falha = extrair(args.bruto, args.saida, args.falhas_esperadas)
+    falha = extrair(args.bruto, args.saida, args.falhas_esperadas, args.carregados, args.meses_recentes)
     return 2 if erros else falha
 
 

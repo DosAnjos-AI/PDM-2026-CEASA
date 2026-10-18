@@ -24,6 +24,17 @@
 # bucket; sql/consultas/bronze/05_ceasa_check.sql cruza essa lista com as
 # tabelas (bruto sem linha no BigQuery e linha no BigQuery sem bruto).
 #
+# So o necessario a cada dia (a coleta ja pulava o bruto existente):
+#   - GO: se os PDFs sao exatamente os do CSV ja enviado (assinatura igual), a
+#     extracao com OCR e pulada. Senao o CSV e refeito inteiro, porque tambem
+#     alimenta bronze.cotacoes, reescrita inteira por 01_bronze.sql.
+#   - MS, SC, MG e ES: antes da extracao, sql/consultas/bronze/
+#     06_boletins_carregados.sql lista o que ja esta na Bronze, e o extrator
+#     processa so os brutos ausentes dela e os dos ultimos MESES_REEXTRAIR
+#     meses. Sede sem nada pendente nao e enviada nem tem a Bronze tocada.
+#   - EXTRAIR_TUDO=1 volta a extracao completa de todas as sedes (por exemplo,
+#     depois de mudar um extrator).
+#
 # Idempotente de ponta a ponta: coletor pula bruto existente, extrator e
 # deterministico, upload sobrescreve o mesmo objeto e todo .sql e
 # LOAD DATA OVERWRITE, CREATE OR REPLACE ou MERGE que nao muda nada quando o
@@ -58,6 +69,14 @@ SEDES=(${SEDES:-ms sc mg es})
 # que entra no manifesto.
 declare -A EXTENSOES_BRUTO=([go]="pdf" [ms]="xls xlsx" [sc]="pdf" [mg]="html" [es]="html")
 OBJETO_MANIFESTO="${OBJETO_MANIFESTO:-${PREFIXO_CSV}/manifesto_brutos.csv}"
+# Assinatura dos PDFs da GO (caminho e tamanho), do extrator e das falhas
+# esperadas que geraram o CSV da GO no bucket; igual = extracao desnecessaria.
+OBJETO_ASSINATURA_GO="${OBJETO_ASSINATURA_GO:-${PREFIXO_CSV}/assinatura_go.txt}"
+# Meses recentes que MS, SC, MG e ES sempre reextraem, mesmo ja na Bronze: a
+# planilha do mes da MS cresce e MG/ES republicam os ultimos 7 dias. 2 = mes
+# atual e anterior, para que a virada do mes nao perca correcao tardia.
+MESES_REEXTRAIR="${MESES_REEXTRAIR:-2}"
+EXTRAIR_TUDO="${EXTRAIR_TUDO:-0}"
 
 # Ordem dos .sql identica a documentada no README.md.
 #
@@ -83,24 +102,66 @@ done
 
 echo "== 1/5 CEASA-GO: coleta (a partir de ${ANO_INICIAL_GO}), extracao e upload"
 python3 ingestao/ceasa_scraper.py --start-year "${ANO_INICIAL_GO}" --out "${DIR_BRUTO}/go"
-python3 ingestao/ceasa_extrair.py --ocr \
-        --entrada "${DIR_BRUTO}/go" \
-        --saida "${DIR_CSV}/cotacoes_site.csv" \
-        --falhas-esperadas "${FALHAS_ESPERADAS_GO}"
-gcloud storage cp "${DIR_CSV}/cotacoes_site.csv" "${BUCKET}/${OBJETO_CSV_GO}" --project="${PROJETO}"
+assinatura_go="$( {
+    find -H "${DIR_BRUTO}/go" -type f -iname '*.pdf' -printf '%P %s\n' | LC_ALL=C sort
+    sha256sum ingestao/ceasa_extrair.py | cut -d' ' -f1
+    echo "falhas_esperadas=${FALHAS_ESPERADAS_GO}"
+} | sha256sum | cut -d' ' -f1 )"
+# Falha ao ler a assinatura anterior (objeto ausente, rede) so leva a extrair.
+assinatura_anterior="$(gcloud storage cat "${BUCKET}/${OBJETO_ASSINATURA_GO}" --project="${PROJETO}" 2>/dev/null || true)"
+if [[ "${EXTRAIR_TUDO}" != 1 && "${assinatura_go}" == "${assinatura_anterior}" ]] \
+   && gcloud storage ls "${BUCKET}/${OBJETO_CSV_GO}" --project="${PROJETO}" >/dev/null 2>&1; then
+    echo "-- PDFs da GO iguais aos do CSV no bucket (assinatura ${assinatura_go:0:12}): extracao pulada"
+else
+    python3 ingestao/ceasa_extrair.py --ocr \
+            --entrada "${DIR_BRUTO}/go" \
+            --saida "${DIR_CSV}/cotacoes_site.csv" \
+            --falhas-esperadas "${FALHAS_ESPERADAS_GO}"
+    gcloud storage cp "${DIR_CSV}/cotacoes_site.csv" "${BUCKET}/${OBJETO_CSV_GO}" --project="${PROJETO}"
+    # So depois do CSV: assinatura no bucket sempre descreve o CSV que la esta.
+    echo "${assinatura_go}" > "${DIR_CSV}/assinatura_go.txt"
+    gcloud storage cp "${DIR_CSV}/assinatura_go.txt" "${BUCKET}/${OBJETO_ASSINATURA_GO}" --project="${PROJETO}"
+fi
 
 echo "== 2/5 demais sedes: ${SEDES[*]}"
 sedes_com_falha=()
 # Sedes cujo CSV foi enviado nesta execucao; so elas tem a Bronze atualizada.
+# A GO entra sempre: mesmo com a extracao pulada, o 02_ceasa_go.sql roda (e um
+# MERGE sem efeito se nada mudou), o que cobre uma execucao anterior que enviou
+# o CSV e falhou antes de chegar ao BigQuery.
 sedes_enviadas=(go)
+# O que ja esta na Bronze de cada sede. Falha na consulta (projeto novo, sem
+# as tabelas ainda) nao e erro: so leva a extracao completa, que e o caminho
+# seguro.
+carregados="${DIR_CSV}/carregados.csv"
+incremental=0
+if [[ "${EXTRAIR_TUDO}" == 1 ]]; then
+    echo "-- EXTRAIR_TUDO=1: extracao completa"
+elif bq query --project_id="${PROJETO}" --use_legacy_sql=false --quiet --format=csv \
+        --max_rows=100000000 < sql/consultas/bronze/06_boletins_carregados.sql > "${carregados}"; then
+    incremental=1
+    echo "-- $(( $(wc -l < "${carregados}") - 1 )) bruto(s) ja na Bronze; extracao incremental"
+else
+    echo "AVISO: nao foi possivel ler os boletins da Bronze; extracao completa" >&2
+fi
 for uf in "${SEDES[@]}"; do
     echo "-- ceasa_${uf}"
     csv="${DIR_CSV}/cotacoes_${uf}.csv"
+    opcoes=()
+    if (( incremental )); then
+        grep "^${uf}," "${carregados}" | cut -d, -f2- > "${DIR_CSV}/carregados_${uf}.txt" || true
+        opcoes=(--carregados "${DIR_CSV}/carregados_${uf}.txt" --meses-recentes "${MESES_REEXTRAIR}")
+    fi
     # O if desliga o set -e so para esta chamada: a falha de uma sede nao
     # derruba as outras nem a CEASA-GO, mas e registrada e reportada no fim.
     if python3 "ingestao/scraping/ceasa_${uf}.py" \
             --bruto "${DIR_BRUTO}/${uf}" \
-            --saida "${csv}"; then
+            --saida "${csv}" "${opcoes[@]}"; then
+        # CSV so com cabecalho: nada pendente, a Bronze da sede ja esta em dia.
+        if (( $(wc -l < "${csv}") <= 1 )); then
+            echo "-- ceasa_${uf}: nada novo para a Bronze"
+            continue
+        fi
         gcloud storage cp "${csv}" "${BUCKET}/${PREFIXO_CSV}/ceasa_${uf}.csv" --project="${PROJETO}"
         sedes_enviadas+=("${uf}")
     else
@@ -146,7 +207,7 @@ for diretorio in "${DIRETORIOS_SQL[@]}"; do
         # tabela fica como estava em vez de derrubar o resto do pipeline.
         if [[ "$(basename "${arquivo}")" =~ ^[0-9]+_ceasa_([a-z]{2})\.sql$ ]] \
            && [[ " ${sedes_enviadas[*]} " != *" ${BASH_REMATCH[1]} "* ]]; then
-            echo "-- ${arquivo} (pulado: ceasa_${BASH_REMATCH[1]} nao foi enviada nesta execucao)"
+            echo "-- ${arquivo} (pulado: ceasa_${BASH_REMATCH[1]} sem CSV novo nesta execucao)"
             continue
         fi
         echo "-- ${arquivo}"

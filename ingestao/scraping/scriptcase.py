@@ -23,7 +23,8 @@ Duas etapas, ambas idempotentes:
      Boletim que volta "Registros nao encontrados" vai para <bruto>/vazios.txt.
      Tudo dos ultimos --revisar-dias e pedido de novo, inclusive o que ja foi
      baixado: o ES publicou os pescados de 05/10/2026 horas depois do resto.
-  2. extracao: le as tabelas guardadas e gera o CSV da sede.
+  2. extracao: le as tabelas guardadas e gera o CSV da sede. Com --carregados,
+     so as que ainda nao estao na Bronze e as dos ultimos --meses-recentes.
 
 `cfg` de cada sede: fonte (rotulo no CSV), filtro (URL da tela de filtro),
 boletim (URL do boletim completo), bruto e saida (caminhos padrao).
@@ -43,7 +44,8 @@ import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from comum import Cliente, grava_atomico, grava_se_conferido, limpa, linha, numero_br  # noqa: E402
+from comum import (Cliente, argumentos_incrementais, grava_atomico, grava_se_conferido,  # noqa: E402
+                   grava_vazio, limpa, linha, numero_br, seleciona_pendentes)
 
 # ------------------------------------------------------------ configuracao
 
@@ -186,9 +188,12 @@ def extrai_boletim(caminho: Path, bruto: Path, fonte: str) -> list[dict]:
     return linhas
 
 
-def extrair(cfg: dict, bruto: Path, saida: Path) -> int:
+def extrair(cfg: dict, bruto: Path, saida: Path,
+            carregados: Path | None = None, meses_recentes: int = 2) -> int:
     fonte = cfg["fonte"]
-    arquivos = sorted(bruto.rglob("*.html"))
+    arquivos = seleciona_pendentes(sorted(bruto.rglob("*.html")), bruto, carregados, meses_recentes)
+    if not arquivos:
+        return grava_vazio(saida, fonte)
     linhas = [l for a in arquivos for l in extrai_boletim(a, bruto, fonte)]
     print(f"\nExtracao {fonte}: {len(arquivos)} boletim(ns)")
     return grava_se_conferido(saida, linhas, fonte)
@@ -206,6 +211,7 @@ def main(cfg: dict) -> int:
     p.add_argument("--delay", type=float, default=0.5, help="segundos entre requisicoes (padrao: 0.5)")
     p.add_argument("--workers", type=int, default=4, help="requisicoes simultaneas (padrao: 4)")
     p.add_argument("--so-extrair", action="store_true", help="nao acessa o site, so refaz o CSV")
+    argumentos_incrementais(p)
     args = p.parse_args()
 
     erros = 0
@@ -218,5 +224,5 @@ def main(cfg: dict) -> int:
         # site fora do ar: o CSV ainda e gerado com o que ja foi baixado
         print(f"! coleta interrompida por falha de rede: {e}", file=sys.stderr)
         erros = 1
-    falha = extrair(cfg, args.bruto, args.saida)
+    falha = extrair(cfg, args.bruto, args.saida, args.carregados, args.meses_recentes)
     return 2 if erros else falha

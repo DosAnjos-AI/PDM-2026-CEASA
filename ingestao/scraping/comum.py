@@ -16,6 +16,7 @@ import re
 import sys
 import threading
 import time
+from datetime import date
 from http.cookiejar import DefaultCookiePolicy
 from pathlib import Path
 
@@ -34,6 +35,10 @@ COLUNAS = [
     "classificacao", "tipo", "origem", "embalagem", "qtd_kg", "preco_minimo", "preco_comum",
     "preco_maximo", "situacao", "arquivo",
 ]
+
+# Ano e mes no caminho relativo de qualquer bruto: GO/SC 2020/01/..., MS 2021/01.xls,
+# MG/ES 214/2021/10/...
+RE_ANO_MES = re.compile(r"(?:^|/)(\d{4})/(\d{2})(?:/|\.|$)")
 
 RE_NUMERO = re.compile(r"^-?\d{1,3}(\.\d{3})*(,\d+)?$|^-?\d+(,\d+)?$")
 
@@ -172,6 +177,53 @@ def grava_se_conferido(caminho: Path, linhas: list[dict], rotulo: str) -> int:
         return 1
     escreve_csv(caminho, linhas)
     print(f"CSV: {caminho.resolve()}")
+    return 0
+
+
+def argumentos_incrementais(p) -> None:
+    """Opcoes comuns aos extratores para extrair so os brutos pendentes."""
+    p.add_argument("--carregados", type=Path, default=None, metavar="ARQ",
+                   help="lista (um caminho por linha) dos brutos que ja estao na Bronze; "
+                        "sem ela, todos os brutos sao extraidos")
+    p.add_argument("--meses-recentes", type=int, default=2, metavar="N",
+                   help="com --carregados, extrai tambem os brutos dos ultimos N meses, "
+                        "que a fonte ainda pode corrigir (padrao: 2 = mes atual e anterior)")
+
+
+def seleciona_pendentes(arquivos: list[Path], bruto: Path, carregados: Path | None,
+                        meses_recentes: int) -> list[Path]:
+    """Brutos a extrair: os ausentes da Bronze e os dos ultimos meses.
+
+    Sem lista de carregados devolve todos (extracao completa). A lista vem do
+    BigQuery e usa o caminho relativo a pasta da sede, o mesmo da coluna arquivo.
+    Bruto ja carregado so volta a ser extraido se for recente: o boletim do dia
+    que a fonte republica e a planilha do mes que cresce caem nessa janela.
+    Caminho sem ano/mes reconhecivel e sempre extraido.
+    """
+    if carregados is None:
+        return arquivos
+    if meses_recentes < 1:
+        raise SystemExit("--meses-recentes precisa ser 1 ou mais")
+    ja = {l.strip() for l in carregados.read_text(encoding="utf-8").splitlines() if l.strip()}
+    hoje = date.today()
+    limite = hoje.year * 12 + hoje.month - 1 - (meses_recentes - 1)
+
+    def recente(rel: str) -> bool:
+        m = RE_ANO_MES.search(rel)
+        return m is None or int(m[1]) * 12 + int(m[2]) - 1 >= limite
+
+    pendentes = [a for a in arquivos
+                 if (rel := a.relative_to(bruto).as_posix()) not in ja or recente(rel)]
+    ausentes = sum(1 for a in arquivos if a.relative_to(bruto).as_posix() not in ja)
+    print(f"Extracao incremental: {len(pendentes)} de {len(arquivos)} bruto(s) "
+          f"({ausentes} ausente(s) da Bronze; o resto e dos ultimos {meses_recentes} mes(es))")
+    return pendentes
+
+
+def grava_vazio(caminho: Path, rotulo: str) -> int:
+    """Nada pendente: CSV so com cabecalho, sinal para o entrypoint nao tocar a Bronze."""
+    escreve_csv(caminho, [])
+    print(f"{rotulo}: nenhum bruto pendente; CSV vazio em {caminho.resolve()}")
     return 0
 
 

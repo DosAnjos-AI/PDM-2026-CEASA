@@ -4,6 +4,8 @@
 -- Origem: gs://<bucket>/raw/cotacoes_site.csv, gerado por
 -- ingestao/ceasa_extrair.py (17 colunas proprias da GO). O mesmo CSV segue
 -- alimentando bronze.cotacoes por 01_bronze.sql, que nao muda.
+-- Os tipos seguem a bronze.ceasa_go que ja existia no projeto (classe STRING,
+-- quantidade e precos FLOAT64), nao os de bronze.cotacoes (INT64 e NUMERIC).
 -- O CSV e refeito a cada execucao a partir de TODOS os brutos da sede, nao so
 -- dos baixados no dia; por isso um boletim que ficou fora de uma carga
 -- anterior entra na proxima.
@@ -50,12 +52,12 @@ LOAD DATA OVERWRITE `bronze.stg_ceasa_go`
   codigo       STRING,
   produto      STRING,
   embalagem    STRING,
-  qtd_kg       NUMERIC,
-  classe       INT64,
-  preco_comum  NUMERIC,
-  preco_maximo NUMERIC,
-  preco_minimo NUMERIC,
-  preco_kg     NUMERIC,
+  qtd_kg       FLOAT64,
+  classe       STRING,
+  preco_comum  FLOAT64,
+  preco_maximo FLOAT64,
+  preco_minimo FLOAT64,
+  preco_kg     FLOAT64,
   layout       STRING,
   arquivo      STRING
 )
@@ -81,12 +83,12 @@ CREATE TABLE IF NOT EXISTS `bronze.ceasa_go`
   codigo       STRING,
   produto      STRING,
   embalagem    STRING,
-  qtd_kg       NUMERIC,
-  classe       INT64,
-  preco_comum  NUMERIC,
-  preco_maximo NUMERIC,
-  preco_minimo NUMERIC,
-  preco_kg     NUMERIC,
+  qtd_kg       FLOAT64,
+  classe       STRING,
+  preco_comum  FLOAT64,
+  preco_maximo FLOAT64,
+  preco_minimo FLOAT64,
+  preco_kg     FLOAT64,
   layout       STRING,
   arquivo      STRING
 );
@@ -94,7 +96,9 @@ CREATE TABLE IF NOT EXISTS `bronze.ceasa_go`
 -- Impressao digital por boletim: as linhas viram texto JSON, ordenadas para
 -- que a ordem no CSV nao importe, e o conjunto vira um hash. Linhas repetidas
 -- dentro do boletim contam (STRING_AGG nao deduplica). Da tabela so entram os
--- boletins que estao no CSV.
+-- boletins que estao no CSV, com cada coluna convertida para o tipo do
+-- staging: a impressao sai igual mesmo que a tabela guarde, por exemplo,
+-- FLOAT64 onde o CSV tem NUMERIC.
 SET (boletins_novos, boletins_alterados) = (
   WITH
   stg AS (
@@ -105,7 +109,7 @@ SET (boletins_novos, boletins_alterados) = (
   ),
   tabela AS (
     SELECT arquivo, FARM_FINGERPRINT(STRING_AGG(linha, '\n' ORDER BY linha)) AS impressao
-    FROM (SELECT arquivo, TO_JSON_STRING(STRUCT(data, ano, mes, dia, grupo, categoria, codigo, produto, embalagem, qtd_kg, classe, preco_comum, preco_maximo, preco_minimo, preco_kg, layout, arquivo)) AS linha
+    FROM (SELECT arquivo, TO_JSON_STRING(STRUCT(CAST(data AS DATE) AS data, CAST(ano AS INT64) AS ano, CAST(mes AS INT64) AS mes, CAST(dia AS INT64) AS dia, CAST(grupo AS STRING) AS grupo, CAST(categoria AS STRING) AS categoria, CAST(codigo AS STRING) AS codigo, CAST(produto AS STRING) AS produto, CAST(embalagem AS STRING) AS embalagem, CAST(qtd_kg AS FLOAT64) AS qtd_kg, CAST(classe AS STRING) AS classe, CAST(preco_comum AS FLOAT64) AS preco_comum, CAST(preco_maximo AS FLOAT64) AS preco_maximo, CAST(preco_minimo AS FLOAT64) AS preco_minimo, CAST(preco_kg AS FLOAT64) AS preco_kg, CAST(layout AS STRING) AS layout, CAST(arquivo AS STRING) AS arquivo)) AS linha
           FROM `bronze.ceasa_go`
           WHERE arquivo IN (SELECT arquivo FROM `bronze.stg_ceasa_go`))
     GROUP BY arquivo

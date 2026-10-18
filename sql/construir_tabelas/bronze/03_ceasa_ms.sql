@@ -95,7 +95,9 @@ CREATE TABLE IF NOT EXISTS `bronze.ceasa_ms`
 -- Impressao digital por boletim: as linhas viram texto JSON, ordenadas para
 -- que a ordem no CSV nao importe, e o conjunto vira um hash. Linhas repetidas
 -- dentro do boletim contam (STRING_AGG nao deduplica). Da tabela so entram os
--- boletins que estao no CSV.
+-- boletins que estao no CSV, com cada coluna convertida para o tipo do
+-- staging: a impressao sai igual mesmo que a tabela guarde, por exemplo,
+-- FLOAT64 onde o CSV tem NUMERIC.
 SET (boletins_novos, boletins_alterados) = (
   WITH
   stg AS (
@@ -106,7 +108,7 @@ SET (boletins_novos, boletins_alterados) = (
   ),
   tabela AS (
     SELECT arquivo, FARM_FINGERPRINT(STRING_AGG(linha, '\n' ORDER BY linha)) AS impressao
-    FROM (SELECT arquivo, TO_JSON_STRING(STRUCT(data, ano, mes, dia, fonte, mercado, grupo, produto, classificacao, tipo, origem, embalagem, qtd_kg, preco_minimo, preco_comum, preco_maximo, situacao, arquivo)) AS linha
+    FROM (SELECT arquivo, TO_JSON_STRING(STRUCT(CAST(data AS DATE) AS data, CAST(ano AS INT64) AS ano, CAST(mes AS INT64) AS mes, CAST(dia AS INT64) AS dia, CAST(fonte AS STRING) AS fonte, CAST(mercado AS STRING) AS mercado, CAST(grupo AS STRING) AS grupo, CAST(produto AS STRING) AS produto, CAST(classificacao AS STRING) AS classificacao, CAST(tipo AS STRING) AS tipo, CAST(origem AS STRING) AS origem, CAST(embalagem AS STRING) AS embalagem, CAST(qtd_kg AS NUMERIC) AS qtd_kg, CAST(preco_minimo AS NUMERIC) AS preco_minimo, CAST(preco_comum AS NUMERIC) AS preco_comum, CAST(preco_maximo AS NUMERIC) AS preco_maximo, CAST(situacao AS STRING) AS situacao, CAST(arquivo AS STRING) AS arquivo)) AS linha
           FROM `bronze.ceasa_ms`
           WHERE arquivo IN (SELECT arquivo FROM `bronze.stg_ceasa_ms`))
     GROUP BY arquivo

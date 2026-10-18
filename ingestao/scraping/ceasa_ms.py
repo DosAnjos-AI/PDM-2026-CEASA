@@ -7,9 +7,12 @@ Cada planilha tem uma aba por dia do mes ("1" a "31") com a tabela de precos
 dividida em grupos (AVES, OVOS / CARNES / FRUTAS / HORTALICAS / ...).
 
 Duas etapas, ambas idempotentes:
-  1. coleta: baixa as planilhas para <bruto>/AAAA/MM.xls. A planilha do mes
-     corrente cresce ao longo do mes, entao e baixada de novo sempre que o
-     tamanho remoto (HEAD) difere do local.
+  1. coleta: baixa as planilhas para <bruto>/AAAA/MM.xls. A fonte preenche a
+     planilha do mes aos poucos e a sobe de novo com o mesmo nome, entao as
+     dos ultimos --meses-recentes meses sao sempre baixadas de novo e gravadas
+     se o conteudo mudou: o tamanho nao serve de sinal, porque o .xls cresce em
+     blocos fixos e ja reserva as 31 abas. As mais antigas so sao baixadas de
+     novo se o tamanho remoto (HEAD) difere do local.
   2. extracao: le todas as abas e gera o CSV no esquema comum. Com
      --carregados, so as planilhas que ainda nao estao na Bronze e as dos
      ultimos --meses-recentes (a do mes corrente sempre entra).
@@ -46,7 +49,7 @@ from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from comum import (DIR_DADOS, Cliente, argumentos_incrementais, grava_atomico, grava_se_conferido,  # noqa: E402
-                   grava_vazio, http_404, limpa, linha, numero_br, seleciona_pendentes)
+                   grava_vazio, http_404, limpa, linha, mes_recente, numero_br, seleciona_pendentes)
 
 # ------------------------------------------------------------ configuracao
 
@@ -99,7 +102,7 @@ def planilhas_do_ano(cli: Cliente, ano: int) -> dict[int, str] | None:
     return achados
 
 
-def coletar(cli: Cliente, bruto: Path, inicio: int, fim: int) -> int:
+def coletar(cli: Cliente, bruto: Path, inicio: int, fim: int, meses_recentes: int = 2) -> int:
     contagem = {"baixado": 0, "atualizado": 0, "existente": 0, "indisponivel": 0, "erro": 0}
     for ano in range(inicio, fim + 1):
         meses = planilhas_do_ano(cli, ano)
@@ -110,12 +113,14 @@ def coletar(cli: Cliente, bruto: Path, inicio: int, fim: int) -> int:
         for mes, url in sorted(meses.items()):
             ext = Path(url).suffix.lower()
             destino = bruto / f"{ano:04d}" / f"{mes:02d}{ext}"
+            recente = mes_recente(ano, mes, meses_recentes)
             try:
                 if destino.exists():
-                    remoto = cli.head(url).headers.get("Content-Length")
-                    if remoto is not None and int(remoto) == destino.stat().st_size:
-                        contagem["existente"] += 1
-                        continue
+                    if not recente:
+                        remoto = cli.head(url).headers.get("Content-Length")
+                        if remoto is not None and int(remoto) == destino.stat().st_size:
+                            contagem["existente"] += 1
+                            continue
                     estado = "atualizado"
                 else:
                     estado = "baixado"
@@ -135,6 +140,10 @@ def coletar(cli: Cliente, bruto: Path, inicio: int, fim: int) -> int:
             if not conteudo.startswith(assinatura):
                 contagem["erro"] += 1
                 print(f"  ! {ano}-{mes:02d}: conteudo nao e {ext} ({url})", file=sys.stderr)
+                continue
+            # planilha recente baixada de novo e igual a local: nada a gravar
+            if estado == "atualizado" and destino.read_bytes() == conteudo:
+                contagem["existente"] += 1
                 continue
             grava_atomico(destino, conteudo)
             contagem[estado] += 1
@@ -317,7 +326,7 @@ def main() -> int:
     erros = 0
     try:
         if not args.so_extrair:
-            erros = coletar(Cliente(args.delay), args.bruto, args.start_year, args.end_year)
+            erros = coletar(Cliente(args.delay), args.bruto, args.start_year, args.end_year, args.meses_recentes)
     except requests.RequestException as e:
         # site fora do ar: o CSV ainda e gerado com o que ja foi baixado
         print(f"! coleta interrompida por falha de rede: {e}", file=sys.stderr)

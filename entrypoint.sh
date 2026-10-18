@@ -74,7 +74,8 @@ OBJETO_MANIFESTO="${OBJETO_MANIFESTO:-${PREFIXO_CSV}/manifesto_brutos.csv}"
 OBJETO_ASSINATURA_GO="${OBJETO_ASSINATURA_GO:-${PREFIXO_CSV}/assinatura_go.txt}"
 # Meses recentes que MS, SC, MG e ES sempre reextraem, mesmo ja na Bronze: a
 # planilha do mes da MS cresce e MG/ES republicam os ultimos 7 dias. 2 = mes
-# atual e anterior, para que a virada do mes nao perca correcao tardia.
+# atual e anterior, para que a virada do mes nao perca correcao tardia. Na MS,
+# as planilhas desses meses tambem sao sempre baixadas de novo.
 MESES_REEXTRAIR="${MESES_REEXTRAIR:-2}"
 EXTRAIR_TUDO="${EXTRAIR_TUDO:-0}"
 
@@ -147,10 +148,11 @@ fi
 for uf in "${SEDES[@]}"; do
     echo "-- ceasa_${uf}"
     csv="${DIR_CSV}/cotacoes_${uf}.csv"
-    opcoes=()
+    # --meses-recentes vale sempre: na MS tambem define as planilhas baixadas de novo
+    opcoes=(--meses-recentes "${MESES_REEXTRAIR}")
     if (( incremental )); then
         grep "^${uf}," "${carregados}" | cut -d, -f2- > "${DIR_CSV}/carregados_${uf}.txt" || true
-        opcoes=(--carregados "${DIR_CSV}/carregados_${uf}.txt" --meses-recentes "${MESES_REEXTRAIR}")
+        opcoes+=(--carregados "${DIR_CSV}/carregados_${uf}.txt")
     fi
     # O if desliga o set -e so para esta chamada: a falha de uma sede nao
     # derruba as outras nem a CEASA-GO, mas e registrada e reportada no fim.

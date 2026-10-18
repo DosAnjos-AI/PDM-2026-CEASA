@@ -187,7 +187,14 @@ def argumentos_incrementais(p) -> None:
                         "sem ela, todos os brutos sao extraidos")
     p.add_argument("--meses-recentes", type=int, default=2, metavar="N",
                    help="com --carregados, extrai tambem os brutos dos ultimos N meses, "
-                        "que a fonte ainda pode corrigir (padrao: 2 = mes atual e anterior)")
+                        "que a fonte ainda pode corrigir (padrao: 2 = mes atual e anterior); "
+                        "na MS, tambem as planilhas sempre baixadas de novo")
+
+
+def mes_recente(ano: int, mes: int, meses_recentes: int) -> bool:
+    """True se ano/mes esta entre os ultimos meses_recentes meses (o atual conta como 1)."""
+    hoje = date.today()
+    return ano * 12 + mes - 1 >= hoje.year * 12 + hoje.month - 1 - (meses_recentes - 1)
 
 
 def seleciona_pendentes(arquivos: list[Path], bruto: Path, carregados: Path | None,
@@ -205,12 +212,10 @@ def seleciona_pendentes(arquivos: list[Path], bruto: Path, carregados: Path | No
     if meses_recentes < 1:
         raise SystemExit("--meses-recentes precisa ser 1 ou mais")
     ja = {l.strip() for l in carregados.read_text(encoding="utf-8").splitlines() if l.strip()}
-    hoje = date.today()
-    limite = hoje.year * 12 + hoje.month - 1 - (meses_recentes - 1)
 
     def recente(rel: str) -> bool:
         m = RE_ANO_MES.search(rel)
-        return m is None or int(m[1]) * 12 + int(m[2]) - 1 >= limite
+        return m is None or mes_recente(int(m[1]), int(m[2]), meses_recentes)
 
     pendentes = [a for a in arquivos
                  if (rel := a.relative_to(bruto).as_posix()) not in ja or recente(rel)]

@@ -1,0 +1,18 @@
+statsforecast==2.1.1
+mlforecast==1.1.0
+coreforecast==0.0.18
+utilsforecast==0.2.17
+lightgbm==4.7.0
+scikit-learn==1.9.1
+pandas==2.3.3
+numpy==2.5.4
+pyarrow==26.0.0
+google-cloud-bigquery==3.46.2
+db-dtypes==1.8.0
+PyYAML==6.0.3
+optuna==4.8.0
+tzdata==2026.5
+# Chronos (o torch CPU é instalado à parte no Dockerfile)
+chronos-forecasting==2.3.2
+transformers==5.20.1
+accelerate==1.15.0

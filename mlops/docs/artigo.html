@@ -1,0 +1,569 @@
+<title>Previsão de Preços CEASA-GO</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: coluna única de artigo científico (~68ch), figuras e tabelas podem respirar até 860px. */
+:root {
+  --papel: #fbfaf7;
+  --tinta: #1f2421;
+  --tinta-suave: #59615b;
+  --linha: #dcdfd8;
+  --fundo-fig: #f1f2ec;
+  --folha: #2f6b4f;        /* verde de folha: acento principal */
+  --folha-clara: #dbe9df;
+  --terra: #a8612a;        /* marrom de raiz: holdout / segundo destaque */
+  --terra-clara: #f3e3d4;
+  --ceu: #3b6b8f;          /* azul: produção / terceira série */
+  --cinza-graf: #8b938c;
+  --ruim: #a33a32;
+  --serif: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --papel: #161a17; --tinta: #e6e9e4; --tinta-suave: #a5ada6; --linha: #2e3530; --fundo-fig: #1d221e;
+    --folha: #7cc29a; --folha-clara: #22382b; --terra: #e0a06b; --terra-clara: #3a2a1d;
+    --ceu: #8db8d8; --cinza-graf: #7f8880; --ruim: #e48a80; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --papel: #161a17; --tinta: #e6e9e4; --tinta-suave: #a5ada6; --linha: #2e3530; --fundo-fig: #1d221e;
+  --folha: #7cc29a; --folha-clara: #22382b; --terra: #e0a06b; --terra-clara: #3a2a1d;
+  --ceu: #8db8d8; --cinza-graf: #7f8880; --ruim: #e48a80; color-scheme: dark;
+}
+
+body {
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--serif);
+  font-size: 1.0625rem;
+  line-height: 1.62;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 3rem 5rem;
+}
+.artigo { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 0; }
+.texto { max-width: 68ch; }
+h1, h2, h3 { font-weight: 700; text-wrap: balance; line-height: 1.22; margin: 0; }
+h1 { font-size: clamp(1.7rem, 4.2vw, 2.35rem); letter-spacing: -0.01em; }
+h2 { font-size: 1.4rem; margin-top: 3rem; margin-bottom: 0.9rem; padding-top: 1.2rem; border-top: 1px solid var(--linha); }
+h3 { font-size: 1.12rem; margin-top: 1.8rem; margin-bottom: 0.5rem; }
+h2 .num, h3 .num { font-family: var(--sans); font-weight: 500; color: var(--folha); margin-right: 0.45em; }
+p { margin: 0 0 0.95rem; }
+a { color: var(--folha); }
+strong { font-weight: 600; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--fundo-fig); padding: 0.08em 0.32em; border-radius: 3px; overflow-wrap: anywhere; }
+
+.cabecalho { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem; }
+.sobretitulo { font-family: var(--sans); font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--folha); font-weight: 600; }
+.autoria { font-family: var(--sans); font-size: 0.9rem; color: var(--tinta-suave); display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; }
+
+.resumo { background: var(--fundo-fig); border-left: 3px solid var(--folha); padding: 1.2rem 1.4rem; border-radius: 2px; max-width: 72ch; }
+.resumo h2 { border: 0; margin: 0 0 0.5rem; padding: 0; font-family: var(--sans); font-size: 0.8rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--folha); }
+.resumo p { font-size: 0.98rem; margin-bottom: 0.7rem; }
+.palavras { font-family: var(--sans); font-size: 0.85rem; color: var(--tinta-suave); margin: 0; }
+.palavras b { color: var(--tinta); font-weight: 600; }
+
+.destaques { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--linha); border: 1px solid var(--linha); margin: 1.6rem 0 0.4rem; }
+.destaque { background: var(--papel); padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.destaque .v { font-family: var(--sans); font-size: 1.55rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--folha); line-height: 1.15; }
+.destaque .r { font-family: var(--sans); font-size: 0.8rem; color: var(--tinta-suave); line-height: 1.35; }
+
+figure { margin: 1.4rem 0 1.6rem; display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+figcaption { font-family: var(--sans); font-size: 0.84rem; color: var(--tinta-suave); line-height: 1.45; max-width: 72ch; }
+figcaption b { color: var(--tinta); font-weight: 600; }
+.rolagem { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.grafico { background: var(--fundo-fig); padding: 0.8rem; border-radius: 3px; }
+.grafico svg { display: block; width: 100%; height: auto; min-width: 560px; }
+.grafico svg text { font-family: var(--sans); }
+
+table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+thead th { text-align: left; font-weight: 600; border-bottom: 1.5px solid var(--tinta); padding: 0.45rem 0.6rem; white-space: nowrap; vertical-align: bottom; }
+tbody td { border-bottom: 1px solid var(--linha); padding: 0.42rem 0.6rem; vertical-align: top; }
+tbody tr:last-child td { border-bottom: 1.5px solid var(--tinta); }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.realce td { background: var(--folha-clara); }
+tr.base td { color: var(--tinta-suave); font-style: italic; }
+.pos { color: var(--folha); font-weight: 600; }
+.neg { color: var(--ruim); }
+.nota-tab { font-family: var(--sans); font-size: 0.78rem; color: var(--tinta-suave); margin-top: 0.4rem; }
+
+ul, ol { margin: 0 0 1rem; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 0.35rem; }
+li { padding-left: 0.15rem; }
+
+.equacao { font-family: var(--serif); font-style: italic; text-align: center; margin: 0.6rem 0 1.1rem; font-size: 1.02rem; overflow-x: auto; }
+.equacao span.r { font-style: normal; font-family: var(--sans); font-size: 0.8rem; color: var(--tinta-suave); margin-left: 1.5rem; }
+
+.caixa { border: 1px solid var(--linha); border-radius: 3px; padding: 0.9rem 1.1rem; background: var(--papel); max-width: 72ch; }
+.caixa h4 { margin: 0 0 0.35rem; font-family: var(--sans); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--terra); }
+.caixa p:last-child { margin-bottom: 0; }
+
+pre.mermaid { background: var(--fundo-fig); padding: 1rem; border-radius: 3px; margin: 0; overflow-x: auto; }
+
+.refs { font-size: 0.92rem; padding-left: 1.6rem; }
+.refs li { padding-left: 0.3rem; }
+.rodape { margin-top: 3rem; font-family: var(--sans); font-size: 0.8rem; color: var(--tinta-suave); border-top: 1px solid var(--linha); padding-top: 1rem; }
+
+@media (max-width: 520px) {
+  body { font-size: 1rem; padding-block: 1.8rem 3rem; }
+  h2 { margin-top: 2.2rem; }
+  .resumo { padding: 1rem; }
+}
+</style>
+
+<article class="artigo">
+
+<header class="cabecalho">
+  <div class="sobretitulo">Projeto PDM · CEASA · Frente de MLOps</div>
+  <h1>Um pipeline de MLOps serverless para previsão semanal de preços de hortifrutigranjeiros na CEASA-GO</h1>
+  <div class="autoria">
+    <span>Grupo PDM-CEASA, frente de MLOps</span>
+    <span>Projeto GCP <code>pdm-ceasa</code></span>
+    <span>Versão do relatório: 16 de outubro de 2026 (pipeline v0.3.3)</span>
+  </div>
+</header>
+
+<section class="resumo" aria-labelledby="resumo-t">
+  <h2 id="resumo-t">Resumo</h2>
+  <p>Apresentamos um pipeline de MLOps totalmente automatizado na Google Cloud Platform para prever o preço semanal de 124 séries de produtos da CEASA-GO, de 1 a 4 semanas à frente. O pipeline lê a camada <em>gold</em> do BigQuery, avalia 13 modelos (baselines, modelos estatísticos, LightGBM e os <em>foundation models</em> Chronos) com o mesmo protocolo de validação <em>walk-forward</em>, escolhe um campeão por meio de uma regra <em>champion–challenger</em> com período de <em>holdout</em> separado e publica as previsões em uma tabela. A orquestração usa Cloud Scheduler e Cloud Run Jobs, sem infraestrutura ligada entre execuções.</p>
+  <p>O preço semanal se comporta quase como um passeio aleatório: repetir o último preço (Naive) é um baseline difícil de vencer. O melhor modelo, Chronos-2 com clima defasado como covariável, reduz o MAE em 4,5% em relação ao Naive no período completo de avaliação, e em 11,7% no horizonte de 4 semanas. No holdout o ganho cai para 0,8%, abaixo do limiar de promoção de 1%, e o Naive segue em produção. Uma estratégia de campeão por horizonte, simulada sobre os mesmos dados, reduz o erro do holdout em 1,8%. Cada execução completa custa cerca de US$ 0,46, e o custo mensal estimado fica dentro da cota gratuita do Cloud Run.</p>
+  <p class="palavras"><b>Palavras-chave:</b> MLOps · previsão de séries temporais · preços agrícolas · champion–challenger · foundation models · Chronos · Cloud Run · BigQuery</p>
+</section>
+
+<div class="destaques" role="list">
+  <div class="destaque" role="listitem"><span class="v">124</span><span class="r">séries produto × classe da CEASA-GO, 2010–2026</span></div>
+  <div class="destaque" role="listitem"><span class="v">13</span><span class="r">modelos no mesmo walk-forward de 12 cortes</span></div>
+  <div class="destaque" role="listitem"><span class="v">+4,5%</span><span class="r">melhor ganho sobre o Naive (Chronos2_clima, MAE)</span></div>
+  <div class="destaque" role="listitem"><span class="v">US$ 0,46</span><span class="r">custo de uma execução completa (33 min, 8 vCPU)</span></div>
+</div>
+
+<h2><span class="num">1</span>Introdução</h2>
+<div class="texto">
+  <p>Centrais de abastecimento como a CEASA-GO publicam diariamente as cotações de centenas de produtos. Prever esses preços com algumas semanas de antecedência ajuda produtores, varejistas e compradores institucionais a planejar compras e vendas. O problema tem duas dificuldades conhecidas: as séries são ruidosas e dominadas por choques de oferta, e modelos que parecem bons em um período frequentemente não se mantêm no seguinte.</p>
+  <p>Este trabalho trata da frente de MLOps do projeto. As camadas de ingestão e limpeza (bronze, silver e gold) são mantidas por outra parte do grupo, e o pipeline aqui descrito parte dos dados já tratados. O objetivo é reproduzir as capacidades centrais de uma plataforma como o Vertex AI (treino agendado, comparação de modelos, registro de versões, promoção controlada, rollback e monitoramento de custo) com serviços <em>serverless</em> de menor custo.</p>
+  <p>As contribuições são:</p>
+  <ol>
+    <li>um pipeline automatizado e reprodutível, com registro completo de execuções, métricas, versões e decisões no BigQuery;</li>
+    <li>uma comparação justa de 13 modelos sob o mesmo protocolo, incluindo três gerações de <em>foundation models</em> Chronos;</li>
+    <li>uma regra de promoção com holdout separado, que nas três execuções avaliadas impediu a troca do campeão por estratégias que pareciam melhores apenas no período de seleção;</li>
+    <li>uma análise de custo medida por execução e uma comparação com os componentes equivalentes do Vertex AI.</li>
+  </ol>
+</div>
+
+<h2><span class="num">2</span>Dados</h2>
+<div class="texto">
+  <p>A fonte é a tabela <code>gold.analitica_semanal</code>, que agrega as cotações diárias da CEASA-GO por semana ISO (segunda a domingo). O alvo é o preço comum médio da semana (<code>media_preco_comum</code>), em reais por unidade de comercialização (caixa, saco, maço etc.), e não por quilo. Cada série é identificada por produto e classe, por exemplo <code>tomate_longa_vida__c1</code>. Lacunas de até 4 semanas já chegam interpoladas da camada gold.</p>
+</div>
+
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Mercado</th><th>Bronze</th><th>Silver</th><th>Gold</th><th>Usado</th></tr></thead>
+      <tbody>
+        <tr class="realce"><td>CEASA-GO (Goiânia)</td><td><code>cotacoes</code>, <code>ceasa_go</code></td><td><code>cotacoes</code> (2010–2026)</td><td><code>analitica_semanal</code></td><td>Sim</td></tr>
+        <tr><td>CEASA-MG (7 mercados)</td><td><code>cotacoes_outras</code>, <code>ceasa_mg</code></td><td>tabela vazia</td><td>não</td><td>Não</td></tr>
+        <tr><td>CEASA-ES (3 mercados)</td><td><code>cotacoes_outras</code>, <code>ceasa_es</code></td><td>tabela vazia</td><td>não</td><td>Não</td></tr>
+        <tr><td>CEASA-SC (São José)</td><td><code>cotacoes_outras</code>, <code>ceasa_sc</code></td><td>tabela vazia</td><td>não</td><td>Não</td></tr>
+        <tr><td>CEASA-MS</td><td><code>ceasa_ms</code></td><td>tabela vazia</td><td>não</td><td>Não</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 1.</b> Cobertura das camadas por mercado. Apenas a CEASA-GO chega à camada gold; os demais mercados existem só como dado bruto.</figcaption>
+</figure>
+
+<div class="texto">
+  <p><strong>Seleção das séries.</strong> O pipeline mantém séries ativas na última semana fechada, recorta cada uma no último trecho contínuo (sem lacunas, exigência dos modelos estatísticos) e descarta as que têm menos de 156 semanas contínuas. Resultam 124 séries e 56.842 observações semanais, de 04/01/2010 a 05/10/2026. Até 2018 o boletim da CEASA-GO cobria cerca de 30 produtos; a partir de 2019 passa de 200. Por isso 68 séries têm histórico anterior a 2019 e as demais começam em 2019 ou depois.</p>
+  <p><strong>Semana incompleta.</strong> A semana em andamento é descartada: uma média calculada com dois ou três pregões entraria no treino como se fosse o preço da semana inteira e mudaria a cada nova carga. Esse ajuste foi introduzido depois que a primeira execução, feita numa quinta-feira, usou a semana de 12/10/2026 com apenas três pregões.</p>
+  <p><strong>Clima.</strong> A tabela <code>bronze.clima_historico</code> traz dados diários de Goiânia (ERA5 via Open-Meteo) desde 2010. O pipeline agrega por semana a temperatura média, a umidade média, a chuva total e a chuva acumulada em 4 e 12 semanas, e desloca todas as variáveis em 4 semanas. Assim, a linha da semana <i>t</i> recebe o clima da semana <i>t</i>−4, que já é conhecido quando a previsão para até 4 semanas à frente é feita.</p>
+</div>
+
+<div class="caixa">
+  <h4>Achado na camada gold</h4>
+  <p>Na tabela <code>gold.treino_semanal</code>, usada pelos modelos BigQuery ML do grupo, a coluna <code>lag_1s</code> corresponde em 100% das linhas ao preço de duas semanas antes do alvo, e não de uma. Ou seja, o preço mais recente não entra nas features. Com a mesma informação, o baseline ingênuo (<code>alvo = lag_1s</code>) obteve MAE 5,21 em 2026, contra 5,95 da árvore e 7,46 da regressão linear do grupo; usando o preço da semana mais recente, o MAE cai para 3,56. O pipeline de MLOps evita a ambiguidade construindo suas próprias features a partir da série de preços.</p>
+</div>
+
+<h2><span class="num">3</span>Arquitetura do pipeline</h2>
+<div class="texto">
+  <p>O pipeline roda inteiro no projeto <code>pdm-ceasa</code>, na região <code>us-central1</code> para computação e <code>US</code> para o BigQuery. Não há máquina ligada entre execuções: o Cloud Scheduler dispara diariamente um Cloud Run Job, que encerra em segundos quando a camada gold não tem semana nova e roda o ciclo completo quando tem.</p>
+</div>
+
+<figure>
+<pre class="mermaid">
+flowchart TD
+    S["Cloud Scheduler<br/>todo dia 07:00 (America/Sao_Paulo)"] --> J["Cloud Run Job treino-precos<br/>8 vCPU · 16 GiB · imagem com pesos Chronos"]
+    G[("BigQuery gold.analitica_semanal")] --> J
+    C[("BigQuery bronze.clima_historico")] --> J
+    J --> D{"Dados mudaram desde a<br/>última execução?"}
+    D -- "não" --> X["Registra sem_dados_novos e encerra"]
+    D -- "sim" --> O["Optuna ajusta LightGBM<br/>só com dados anteriores ao 1º corte"]
+    O --> W["Walk-forward: 13 modelos × 12 cortes × h = 1..4"]
+    W --> K["Candidata: melhor modelo por série<br/>nas 8 janelas de seleção"]
+    K --> H{"Candidata vence o campeão<br/>no holdout por ≥ 1%?"}
+    H -- "sim" --> P["Promove nova versão"]
+    H -- "não" --> M["Mantém campeão"]
+    P --> F["Previsão das próximas 4 semanas"]
+    M --> F
+    F --> R[("BigQuery mlops.*<br/>execuções · métricas · versões · previsões")]
+    R --> V["Views: previsoes_atuais · producao_atual · custo_execucoes"]
+</pre>
+  <figcaption><b>Figura 1.</b> Fluxo de uma execução. Todas as etapas ficam no mesmo job; o estado entre execuções vive apenas nas tabelas do dataset <code>mlops</code>.</figcaption>
+</figure>
+
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Capacidade do Vertex AI</th><th>Implementação neste pipeline</th></tr></thead>
+      <tbody>
+        <tr><td>Pipelines agendados</td><td>Cloud Scheduler + Cloud Run Job, com verificação de dados novos pela impressão digital (hash) do conjunto</td></tr>
+        <tr><td>Custom Training</td><td>Container próprio (Python 3.13, statsforecast, mlforecast, LightGBM, Chronos) construído pelo Cloud Build</td></tr>
+        <tr><td>Experiments</td><td>Tabelas <code>mlops.execucoes</code>, <code>mlops.metricas</code>, <code>mlops.metricas_serie</code> e <code>mlops.previsoes_cv</code>, todas com <code>run_id</code></td></tr>
+        <tr><td>Model Registry</td><td><code>mlops.versoes</code> (decisão e motivo) e <code>mlops.versao_series</code> (modelo de cada série)</td></tr>
+        <tr><td>Deploy e rollback</td><td><code>mlops.producao</code>, tabela só de inserção com promoções e rollbacks; a linha mais recente é a versão em produção</td></tr>
+        <tr><td>Batch Prediction</td><td><code>mlops.previsoes</code> e a view <code>previsoes_atuais</code>, pronta para dashboard</td></tr>
+        <tr><td>Hyperparameter Tuning</td><td>Optuna (TPE, 25 trials) dentro do job</td></tr>
+        <tr><td>Monitoramento de custo</td><td>View <code>mlops.custo_execucoes</code>, calculada a partir da duração e dos recursos do job</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 2.</b> Correspondência entre os componentes do Vertex AI e a implementação serverless.</figcaption>
+</figure>
+
+<div class="texto">
+  <p><strong>Reprodutibilidade.</strong> Cada execução grava a configuração completa (<code>treino.yaml</code>), a versão do código, a impressão digital dos dados, os hiperparâmetros escolhidos pelo Optuna e o tempo de cada modelo. As dependências são fixadas por versão, e os pesos dos modelos Chronos são baixados durante o build da imagem, então a execução não depende do Hugging Face e sempre usa os mesmos pesos. Falhas também ficam registradas: uma execução interrompida por falta de cobertura do clima gravou o status <code>falhou</code> com a mensagem de erro.</p>
+</div>
+
+<h2><span class="num">4</span>Metodologia</h2>
+
+<h3><span class="num">4.1</span>Modelos</h3>
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Família</th><th>Modelo</th><th>Descrição</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="2">Baselines</td><td>Naive</td><td>Repete o último preço observado</td></tr>
+        <tr><td>SeasonalNaive</td><td>Repete o preço de 52 semanas antes</td></tr>
+        <tr><td rowspan="3">Estatísticos (um por série)</td><td>ARIMA</td><td>AutoARIMA sem sazonalidade</td></tr>
+        <tr><td>ETS</td><td>Suavização exponencial automática</td></tr>
+        <tr><td>Theta</td><td>AutoTheta com decomposição sazonal de 52 semanas</td></tr>
+        <tr><td rowspan="5">Aprendizado de máquina (um modelo global)</td><td>LightGBM</td><td>Estratégia recursiva, sem clima</td></tr>
+        <tr><td>LightGBM_direto</td><td>Um modelo por horizonte, sem clima</td></tr>
+        <tr><td>LightGBM_clima</td><td>Direto, com clima</td></tr>
+        <tr><td>LightGBM_otimizado</td><td>Direto, com clima, hiperparâmetros do Optuna</td></tr>
+        <tr><td>Ridge</td><td>Regressão linear regularizada, recursiva</td></tr>
+        <tr><td rowspan="3"><i>Foundation models</i> (zero-shot)</td><td>Chronos2</td><td>Chronos-2 (Amazon, 2025), só a série de preço</td></tr>
+        <tr><td>Chronos2_clima</td><td>Chronos-2 com clima como covariável passada e futura</td></tr>
+        <tr><td>ChronosBolt</td><td>Chronos-Bolt base (1ª geração, versão rápida)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 3.</b> Modelos avaliados. SARIMA (período 52) e Chronos-T5 small também foram avaliados e depois desativados por custo e desempenho (seção 5.1).</figcaption>
+</figure>
+<div class="texto">
+  <p>Os modelos de aprendizado de máquina usam como features os lags 1, 2, 3, 4, 8, 13 e 52, médias móveis de 4 e 12 semanas, mês e semana do ano. O alvo é transformado em log(1 + preço) e diferenciado, de modo que um único modelo aprende a variação percentual semanal de produtos com preços entre R$ 5 e R$ 200. Os modelos Chronos não são treinados com os dados do projeto: em cada corte recebem o histórico disponível e preveem as semanas seguintes. Todos rodam em CPU.</p>
+</div>
+
+<h3><span class="num">4.2</span>Validação walk-forward</h3>
+<div class="texto">
+  <p>Todos os modelos são avaliados nos mesmos 12 cortes, espaçados em 4 semanas e cobrindo as últimas 48 semanas. Em cada corte o modelo é treinado com todo o histórico até aquela data e prevê as 4 semanas seguintes. Os 8 primeiros cortes formam o período de <strong>seleção</strong>, usado para escolher modelos; os 4 últimos formam o <strong>holdout</strong>, que não participa da escolha e serve apenas para decidir a promoção. A busca de hiperparâmetros do Optuna usa só dados anteriores ao primeiro corte.</p>
+</div>
+
+<figure>
+  <div class="grafico rolagem">
+    <svg viewBox="0 0 640 300" role="img" aria-labelledby="fig2-t">
+      <title id="fig2-t">Linha do tempo dos 12 cortes do walk-forward e da previsão de produção</title>
+      <g font-size="10" fill="var(--tinta-suave)">
+        <text x="84" y="22" text-anchor="end">corte</text>
+        <text x="90" y="22">treino (histórico desde 2010 →)</text>
+      </g>
+      <!-- linhas de grade dos meses: semana 0 = 03/11/2025, 10 px por semana, x0 = 90 -->
+      <g stroke="var(--linha)" stroke-width="1">
+        <line x1="90" y1="30" x2="90" y2="262"/><line x1="180" y1="30" x2="180" y2="262"/><line x1="260" y1="30" x2="260" y2="262"/>
+        <line x1="350" y1="30" x2="350" y2="262"/><line x1="440" y1="30" x2="440" y2="262"/><line x1="530" y1="30" x2="530" y2="262"/>
+        <line x1="610" y1="30" x2="610" y2="262"/>
+      </g>
+      <g font-size="10" fill="var(--tinta-suave)" text-anchor="middle">
+        <text x="90" y="278">nov/25</text><text x="180" y="278">jan/26</text><text x="260" y="278">mar/26</text>
+        <text x="350" y="278">mai/26</text><text x="440" y="278">jul/26</text><text x="530" y="278">set/26</text><text x="610" y="278">nov/26</text>
+      </g>
+      <g font-size="9.5" fill="var(--tinta-suave)" text-anchor="end">
+        <text x="84" y="41">03/11/25</text><text x="84" y="57">01/12/25</text><text x="84" y="73">29/12/25</text><text x="84" y="89">26/01/26</text>
+        <text x="84" y="105">23/02/26</text><text x="84" y="121">23/03/26</text><text x="84" y="137">20/04/26</text><text x="84" y="153">18/05/26</text>
+        <text x="84" y="169">15/06/26</text><text x="84" y="185">13/07/26</text><text x="84" y="201">10/08/26</text><text x="84" y="217">07/09/26</text>
+        <text x="84" y="247">05/10/26</text>
+      </g>
+      <!-- treino: do início até o corte -->
+      <g fill="var(--cinza-graf)" opacity="0.45">
+        <rect x="88" y="33" width="2" height="10"/><rect x="88" y="49" width="42" height="10"/><rect x="88" y="65" width="82" height="10"/>
+        <rect x="88" y="81" width="122" height="10"/><rect x="88" y="97" width="162" height="10"/><rect x="88" y="113" width="202" height="10"/>
+        <rect x="88" y="129" width="242" height="10"/><rect x="88" y="145" width="282" height="10"/><rect x="88" y="161" width="322" height="10"/>
+        <rect x="88" y="177" width="362" height="10"/><rect x="88" y="193" width="402" height="10"/><rect x="88" y="209" width="442" height="10"/>
+        <rect x="88" y="239" width="482" height="10"/>
+      </g>
+      <!-- previsões de 4 semanas: seleção -->
+      <g fill="var(--folha)">
+        <rect x="90" y="33" width="40" height="10"/><rect x="130" y="49" width="40" height="10"/><rect x="170" y="65" width="40" height="10"/>
+        <rect x="210" y="81" width="40" height="10"/><rect x="250" y="97" width="40" height="10"/><rect x="290" y="113" width="40" height="10"/>
+        <rect x="330" y="129" width="40" height="10"/><rect x="370" y="145" width="40" height="10"/>
+      </g>
+      <!-- holdout -->
+      <g fill="var(--terra)">
+        <rect x="410" y="161" width="40" height="10"/><rect x="450" y="177" width="40" height="10"/>
+        <rect x="490" y="193" width="40" height="10"/><rect x="530" y="209" width="40" height="10"/>
+      </g>
+      <!-- produção -->
+      <rect x="570" y="239" width="40" height="10" fill="var(--ceu)"/>
+      <line x1="20" y1="229" x2="620" y2="229" stroke="var(--linha)" stroke-dasharray="3 3"/>
+      <!-- legenda -->
+      <g font-size="10" fill="var(--tinta)">
+        <rect x="300" y="13" width="10" height="10" fill="var(--folha)"/><text x="314" y="22">seleção</text>
+        <rect x="368" y="13" width="10" height="10" fill="var(--terra)"/><text x="382" y="22">holdout</text>
+        <rect x="436" y="13" width="10" height="10" fill="var(--ceu)"/><text x="450" y="22">previsão publicada</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Figura 2.</b> Cortes da execução de 16/10/2026. Barras cinzas: dados de treino disponíveis em cada corte (o histórico começa em 2010, fora da escala). Barras coloridas: as 4 semanas previstas. A última linha é a previsão de produção, treinada com todos os dados até 05/10/2026.</figcaption>
+</figure>
+
+<h3><span class="num">4.3</span>Métricas</h3>
+<div class="texto">
+  <p>Para cada modelo, horizonte <i>h</i> e período, calculamos MAE, RMSE, WAPE e R². A comparação principal usa o ganho relativo sobre o Naive no mesmo horizonte:</p>
+  <p class="equacao">ganho(<i>m</i>, <i>h</i>) = 1 − MAE(<i>m</i>, <i>h</i>) / MAE(Naive, <i>h</i>)<span class="r">positivo = erra menos que o Naive</span></p>
+  <p>O MAE é expresso em reais por unidade de comercialização e, por ser absoluto, pesa mais os produtos caros. O WAPE (soma dos erros absolutos sobre a soma dos valores reais) é reportado como medida relativa.</p>
+</div>
+
+<h3><span class="num">4.4</span>Regra champion–challenger</h3>
+<div class="texto">
+  <p>A cada execução o pipeline monta uma <strong>versão candidata</strong>: para cada série, o modelo com menor MAE nas janelas de seleção, desde que erre pelo menos 3% menos que o Naive naquela série; caso contrário, a série fica com o Naive. A candidata é comparada no holdout com o campeão em produção (inicialmente, Naive em todas as séries) e só é promovida se:</p>
+  <ol>
+    <li>não errar mais que o Naive no holdout; e</li>
+    <li>errar pelo menos 1% menos que o campeão atual no holdout.</li>
+  </ol>
+  <p>Toda candidata é registrada, promovida ou não, com as métricas de holdout e o motivo da decisão. O rollback insere uma nova linha em <code>mlops.producao</code> apontando para uma versão anterior ou para o Naive.</p>
+</div>
+
+<h2><span class="num">5</span>Resultados</h2>
+
+<h3><span class="num">5.1</span>Comparação geral</h3>
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Modelo</th><th class="n">MAE (R$)</th><th class="n">RMSE</th><th class="n">WAPE</th><th class="n">Ganho geral</th><th class="n">Ganho holdout</th><th class="n">Tempo (s)</th></tr></thead>
+      <tbody>
+        <tr class="realce"><td><strong>Chronos2_clima</strong></td><td class="n">5,79</td><td class="n">10,81</td><td class="n">7,15%</td><td class="n pos">+4,5%</td><td class="n pos">+0,8%</td><td class="n">346</td></tr>
+        <tr><td>Chronos2</td><td class="n">5,89</td><td class="n">10,96</td><td class="n">7,26%</td><td class="n pos">+2,9%</td><td class="n neg">−1,0%</td><td class="n">106</td></tr>
+        <tr><td>ChronosBolt</td><td class="n">5,98</td><td class="n">11,17</td><td class="n">7,38%</td><td class="n pos">+1,4%</td><td class="n neg">−4,1%</td><td class="n">98</td></tr>
+        <tr class="base"><td>Naive</td><td class="n">6,07</td><td class="n">11,98</td><td class="n">7,48%</td><td class="n">—</td><td class="n">—</td><td class="n">0,3</td></tr>
+        <tr><td>ARIMA</td><td class="n">6,08</td><td class="n">11,30</td><td class="n">7,50%</td><td class="n neg">−0,3%</td><td class="n neg">−5,4%</td><td class="n">113</td></tr>
+        <tr><td>Theta</td><td class="n">6,16</td><td class="n">11,79</td><td class="n">7,60%</td><td class="n neg">−1,6%</td><td class="n neg">−4,3%</td><td class="n">17</td></tr>
+        <tr><td>LightGBM_direto</td><td class="n">6,23</td><td class="n">11,54</td><td class="n">7,68%</td><td class="n neg">−2,7%</td><td class="n neg">−1,6%</td><td class="n">46</td></tr>
+        <tr><td>LightGBM</td><td class="n">6,24</td><td class="n">11,47</td><td class="n">7,70%</td><td class="n neg">−2,9%</td><td class="n neg">−2,1%</td><td class="n">13</td></tr>
+        <tr><td>ETS</td><td class="n">6,27</td><td class="n">12,12</td><td class="n">7,74%</td><td class="n neg">−3,4%</td><td class="n neg">−7,5%</td><td class="n">6</td></tr>
+        <tr><td>LightGBM_otimizado</td><td class="n">6,32</td><td class="n">11,72</td><td class="n">7,80%</td><td class="n neg">−4,3%</td><td class="n neg">−3,9%</td><td class="n">1.102</td></tr>
+        <tr><td>LightGBM_clima</td><td class="n">6,34</td><td class="n">11,66</td><td class="n">7,82%</td><td class="n neg">−4,5%</td><td class="n neg">−3,5%</td><td class="n">52</td></tr>
+        <tr><td>Ridge</td><td class="n">6,43</td><td class="n">11,72</td><td class="n">7,93%</td><td class="n neg">−6,0%</td><td class="n neg">−8,9%</td><td class="n">1</td></tr>
+        <tr><td>SeasonalNaive</td><td class="n">12,43</td><td class="n">20,70</td><td class="n">15,33%</td><td class="n neg">−104,9%</td><td class="n neg">−117,4%</td><td class="n">0,3</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 4.</b> Desempenho no walk-forward completo (12 cortes, horizontes 1 a 4 somados), execução <code>20261016T173008_a20b53</code>, histórico desde 2010. Em uma execução anterior com histórico desde 2021, SARIMA obteve −6,4% (geral) e −4,0% (holdout) em 337 s, e Chronos-T5 small −4,0% e −12,8% em 371 s; ambos foram desativados.</figcaption>
+</figure>
+
+<div class="texto">
+  <p>Três padrões aparecem. Primeiro, o Naive é um baseline forte: apenas os três modelos Chronos o superam no período completo, e só o Chronos2_clima o supera também no holdout. Segundo, vários modelos com MAE pior que o Naive têm RMSE menor (ARIMA, LightGBM, Ridge), ou seja, erram menos nas grandes oscilações de preço, que são as mais relevantes para quem compra. Terceiro, as gerações do Chronos se ordenam como esperado: Chronos-T5 &lt; Chronos-Bolt &lt; Chronos-2.</p>
+</div>
+
+<h3><span class="num">5.2</span>Efeito do horizonte</h3>
+<figure>
+  <div class="grafico rolagem">
+    <svg viewBox="0 0 700 330" role="img" aria-labelledby="fig3-t">
+      <title id="fig3-t">Ganho sobre o Naive por horizonte para quatro modelos</title>
+      <!-- escala y: v em % -> y = 280 - (v + 8) * 12.5 ; x: h1=100, h2=250, h3=400, h4=550 -->
+      <g stroke="var(--linha)" stroke-width="1">
+        <line x1="70" y1="280" x2="580" y2="280"/><line x1="70" y1="230" x2="580" y2="230"/>
+        <line x1="70" y1="130" x2="580" y2="130"/><line x1="70" y1="80" x2="580" y2="80"/><line x1="70" y1="30" x2="580" y2="30"/>
+      </g>
+      <line x1="70" y1="180" x2="580" y2="180" stroke="var(--tinta-suave)" stroke-width="1.2" stroke-dasharray="5 4"/>
+      <g font-size="11" fill="var(--tinta-suave)" text-anchor="end">
+        <text x="62" y="284">−8%</text><text x="62" y="234">−4%</text><text x="62" y="184">0%</text>
+        <text x="62" y="134">+4%</text><text x="62" y="84">+8%</text><text x="62" y="34">+12%</text>
+      </g>
+      <g font-size="11" fill="var(--tinta-suave)" text-anchor="middle">
+        <text x="100" y="304">1 semana</text><text x="250" y="304">2 semanas</text><text x="400" y="304">3 semanas</text><text x="550" y="304">4 semanas</text>
+        <text x="325" y="324">horizonte de previsão</text>
+      </g>
+      <text x="586" y="184" font-size="11" fill="var(--tinta-suave)">Naive</text>
+      <!-- LightGBM_direto: -4.8, -4.0, -5.3, 1.7 -->
+      <polyline points="100,240 250,230 400,246.25 550,158.75" fill="none" stroke="var(--cinza-graf)" stroke-width="2"/>
+      <g fill="var(--cinza-graf)"><circle cx="100" cy="240" r="3.5"/><circle cx="250" cy="230" r="3.5"/><circle cx="400" cy="246.25" r="3.5"/><circle cx="550" cy="158.75" r="4.5"/></g>
+      <text x="562" y="162" font-size="11.5" fill="var(--tinta-suave)">LightGBM direto +1,7%</text>
+      <!-- ARIMA: -5.8, -3.6, 0.7, 3.9 -->
+      <polyline points="100,252.5 250,225 400,171.25 550,131.25" fill="none" stroke="var(--ceu)" stroke-width="2"/>
+      <g fill="var(--ceu)"><circle cx="100" cy="252.5" r="3.5"/><circle cx="250" cy="225" r="3.5"/><circle cx="400" cy="171.25" r="3.5"/><circle cx="550" cy="131.25" r="4.5"/></g>
+      <text x="562" y="135" font-size="11.5" fill="var(--ceu)">ARIMA +3,9%</text>
+      <!-- Chronos2: -5.3, 0.4, 2.9, 8.8 -->
+      <polyline points="100,246.25 250,175 400,143.75 550,70" fill="none" stroke="var(--terra)" stroke-width="2"/>
+      <g fill="var(--terra)"><circle cx="100" cy="246.25" r="3.5"/><circle cx="250" cy="175" r="3.5"/><circle cx="400" cy="143.75" r="3.5"/><circle cx="550" cy="70" r="4.5"/></g>
+      <text x="562" y="74" font-size="11.5" fill="var(--terra)">Chronos2 +8,8%</text>
+      <!-- Chronos2_clima: -6.1, 1.5, 4.6, 11.7 -->
+      <polyline points="100,256.25 250,161.25 400,122.5 550,33.75" fill="none" stroke="var(--folha)" stroke-width="2.6"/>
+      <g fill="var(--folha)"><circle cx="100" cy="256.25" r="3.5"/><circle cx="250" cy="161.25" r="3.5"/><circle cx="400" cy="122.5" r="3.5"/><circle cx="550" cy="33.75" r="5"/></g>
+      <text x="562" y="38" font-size="11.5" font-weight="600" fill="var(--folha)">Chronos2_clima +11,7%</text>
+    </svg>
+  </div>
+  <figcaption><b>Figura 3.</b> Ganho de MAE sobre o Naive por horizonte (12 cortes). Para a semana seguinte nenhum modelo supera o Naive; a vantagem dos modelos cresce com o horizonte e chega a 11,7% no Chronos2_clima em 4 semanas.</figcaption>
+</figure>
+
+<div class="texto">
+  <p>Para 1 semana à frente, o último preço já contém quase toda a informação disponível, e todos os modelos perdem para o Naive (entre −3,9% e −10,8%). A partir de 2 semanas o Chronos-2 passa a ganhar, e em 4 semanas os três Chronos, o ARIMA e o LightGBM direto ficam à frente.</p>
+</div>
+
+<h3><span class="num">5.3</span>Tamanho do histórico</h3>
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Modelo</th><th class="n">MAE desde 2021</th><th class="n">MAE desde 2010</th><th class="n">Variação</th><th class="n">Holdout (2021 → 2010)</th></tr></thead>
+      <tbody>
+        <tr><td>Chronos2_clima</td><td class="n">5,82</td><td class="n">5,79</td><td class="n pos">+0,4%</td><td class="n">−0,1% → <span class="pos">+0,8%</span></td></tr>
+        <tr><td>Chronos2</td><td class="n">6,00</td><td class="n">5,89</td><td class="n pos">+1,9%</td><td class="n">−3,6% → −1,0%</td></tr>
+        <tr><td>ChronosBolt</td><td class="n">6,15</td><td class="n">5,98</td><td class="n pos">+2,7%</td><td class="n">−5,1% → −4,1%</td></tr>
+        <tr><td>Theta</td><td class="n">6,24</td><td class="n">6,16</td><td class="n pos">+1,3%</td><td class="n">−3,0% → −4,3%</td></tr>
+        <tr><td>LightGBM</td><td class="n">6,30</td><td class="n">6,24</td><td class="n pos">+0,9%</td><td class="n">−1,3% → −2,1%</td></tr>
+        <tr><td>ARIMA</td><td class="n">6,07</td><td class="n">6,08</td><td class="n neg">−0,2%</td><td class="n">−3,1% → −5,4%</td></tr>
+        <tr><td>Ridge</td><td class="n">6,40</td><td class="n">6,43</td><td class="n neg">−0,5%</td><td class="n">−7,9% → −8,9%</td></tr>
+        <tr><td>LightGBM_otimizado</td><td class="n">6,15</td><td class="n">6,32</td><td class="n neg">−2,8%</td><td class="n">−0,4% → −3,9%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 5.</b> Mesmas 124 séries e mesmas semanas avaliadas, mudando apenas o início do histórico de treino. O MAE do Naive é idêntico nas duas execuções (6,065), o que confirma a comparabilidade.</figcaption>
+</figure>
+<div class="texto">
+  <p>Os modelos Chronos são os que mais aproveitam o histórico longo, por receberem mais contexto. O LightGBM otimizado piora: com o histórico desde 2010, o período usado pelo Optuna passa a ser dominado por dados de outra época, e os hiperparâmetros escolhidos generalizam pior para 2026. A busca também ficou mais lenta, de 10 para 18 minutos.</p>
+</div>
+
+<h3><span class="num">5.4</span>Efeito do clima</h3>
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Comparação</th><th class="n">h = 1</th><th class="n">h = 2</th><th class="n">h = 3</th><th class="n">h = 4</th><th class="n">Geral</th><th class="n">Holdout</th></tr></thead>
+      <tbody>
+        <tr><td>Chronos2_clima × Chronos2</td><td class="n neg">−0,7%</td><td class="n pos">+1,2%</td><td class="n pos">+1,8%</td><td class="n pos">+3,2%</td><td class="n pos">+1,6%</td><td class="n pos">+1,8%</td></tr>
+        <tr><td>LightGBM_clima × LightGBM_direto</td><td class="n pos">+0,4%</td><td class="n neg">−2,8%</td><td class="n neg">−1,5%</td><td class="n neg">−2,3%</td><td class="n neg">−1,8%</td><td class="n neg">−1,9%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 6.</b> Ganho de MAE ao acrescentar o clima, com o resto do modelo igual.</figcaption>
+</figure>
+<div class="texto">
+  <p>O clima ajuda o Chronos-2 de forma consistente na seleção e no holdout, e o efeito cresce com o horizonte, o que é coerente com a ideia de que chuva e temperatura antecipam a oferta da colheita. O LightGBM piora com as mesmas variáveis, o que sugere sobreajuste a covariáveis ruidosas. Por série, o clima melhora o Chronos-2 em 57 das 124 séries, empata em 20 e piora em 47. O ganho se concentra nos grupos de produtos frescos (+3,6% no grupo <code>rtb</code> e +2,1% em <code>hf</code>) e é negativo nos armazenáveis ou processados (feijão, azeitona e farinha de milho estão entre as séries mais prejudicadas).</p>
+</div>
+
+<h3><span class="num">5.5</span>Decisões de promoção</h3>
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Execução</th><th>Configuração</th><th class="n">Candidata (holdout)</th><th class="n">Campeão Naive</th><th>Decisão</th></tr></thead>
+      <tbody>
+        <tr><td><code>…141657_dc8e89</code></td><td>11 modelos, desde 2021</td><td class="n">5,479</td><td class="n">5,406</td><td>Rejeitada: pior que o Naive</td></tr>
+        <tr><td><code>…152831_8838e3</code></td><td>15 modelos (+ Chronos), desde 2021</td><td class="n">5,534</td><td class="n">5,406</td><td>Rejeitada: pior que o Naive</td></tr>
+        <tr><td><code>…173008_a20b53</code></td><td>13 modelos, desde 2010</td><td class="n">5,360</td><td class="n">5,406</td><td>Rejeitada: ganho de 0,8% abaixo do limiar de 1%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 7.</b> Registro em <code>mlops.versoes</code>. MAE no holdout (4 cortes, 16 semanas, 124 séries).</figcaption>
+</figure>
+<div class="texto">
+  <p>A escolha de um modelo por série sofre de viés de seleção: com séries próximas de um passeio aleatório, a vantagem que um modelo mostra no período de seleção é em boa parte sorte. O ARIMA ilustra o efeito, com +1,2% na seleção e −5,4% no holdout. Nas duas primeiras execuções a candidata teria piorado as previsões em produção, e a regra impediu a troca.</p>
+  <p><strong>Campeão por horizonte (simulação).</strong> Aplicamos a mesma lógica escolhendo um modelo por horizonte em vez de um por série, com os dados da última execução. Na seleção, o Naive vence em 1 e 2 semanas e o Chronos2_clima em 3 e 4. No holdout essa estratégia obtém MAE 5,309 contra 5,406 do Naive, um ganho de 1,8%, acima do limiar de promoção. Para 4 semanas o MAE cai de 7,03 para 6,74 (+4,1%). A estratégia ainda não está implementada no pipeline.</p>
+</div>
+
+<h3><span class="num">5.6</span>Custo</h3>
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Execução</th><th>Versão</th><th class="n">Memória</th><th class="n">Tempo cobrado</th><th class="n">Custo</th></tr></thead>
+      <tbody>
+        <tr><td>8 modelos</td><td>v0.1</td><td class="n">8 GiB</td><td class="n">15 min</td><td class="n">US$ 0,20</td></tr>
+        <tr><td>11 modelos + Optuna</td><td>v0.2</td><td class="n">8 GiB</td><td class="n">24 min</td><td class="n">US$ 0,30</td></tr>
+        <tr><td>15 modelos com Chronos</td><td>v0.3.1</td><td class="n">16 GiB</td><td class="n">30 min</td><td class="n">US$ 0,42</td></tr>
+        <tr><td>Falha (clima sem cobertura)</td><td>v0.3.2</td><td class="n">16 GiB</td><td class="n">5 min</td><td class="n">US$ 0,07</td></tr>
+        <tr><td>13 modelos, desde 2010</td><td>v0.3.3</td><td class="n">16 GiB</td><td class="n">33 min</td><td class="n">US$ 0,46</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 8.</b> View <code>mlops.custo_execucoes</code>: 8 vCPU, preços Tier 1 do Cloud Run (US$ 0,000024 por vCPU-s e US$ 0,0000025 por GiB-s), mais 60 s de inicialização do container, sem a cota gratuita. Uma execução interrompida por falta de memória (cerca de US$ 0,30) não gravou registro e não aparece.</figcaption>
+</figure>
+
+<figure>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Cenário mensal</th><th class="n">Este pipeline</th><th class="n">Vertex AI equivalente</th></tr></thead>
+      <tbody>
+        <tr><td>4 treinos completos</td><td class="n">~US$ 1,90</td><td class="n">~US$ 1,40</td></tr>
+        <tr><td>30 verificações diárias de dados novos</td><td class="n">~US$ 0,40</td><td class="n">~US$ 1,20</td></tr>
+        <tr><td>Subtotal sem cota gratuita</td><td class="n">~US$ 2,30</td><td class="n">~US$ 2,60</td></tr>
+        <tr><td>Com a cota gratuita do Cloud Run</td><td class="n">~US$ 0</td><td class="n">~US$ 2,60</td></tr>
+        <tr><td>Previsões servidas por API online</td><td class="n">~US$ 0 (escala a zero)</td><td class="n">~US$ 56 (endpoint ligado 24 h)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Tabela 9.</b> Estimativa mensal. Vertex: Custom Training n1-standard-8 (~US$ 0,437/h), Pipelines (US$ 0,03 por execução) e endpoint e2-standard-2 (~US$ 0,077/h). O scale-to-zero de endpoints do Vertex existe em versão beta, com mínimo de 1 hora ligado e rejeição da primeira requisição.</figcaption>
+</figure>
+<div class="texto">
+  <p>Por execução, a máquina do Vertex custa menos que o Cloud Run. A economia do pipeline vem de três escolhas de arquitetura: o uso da cota gratuita do Cloud Run, a ausência de infraestrutura ligada entre execuções e a publicação das previsões em lote numa tabela, sem endpoint. O custo dessas escolhas foi o tempo de desenvolvimento dos componentes que o Vertex oferece prontos (tabela 2).</p>
+</div>
+
+<h2><span class="num">6</span>Discussão</h2>
+<div class="texto">
+  <p>O resultado central é que, para preços semanais de hortifrutigranjeiros, modelos mais sofisticados só agregam valor em horizontes mais longos. Para a semana seguinte, nenhum dos 13 modelos supera repetir o último preço. Isso reforça uma prática pouco comum em trabalhos com séries de preço: incluir sempre o baseline ingênuo e reportar o ganho sobre ele. Sem esse baseline, os R² acima de 0,96 obtidos pelos modelos do grupo pareceriam excelentes, quando o mesmo valor é alcançado repetindo o preço anterior.</p>
+  <p>O segundo ponto é o valor do holdout. As estratégias que pareciam melhores na seleção não se mantiveram, e sem uma regra de promoção baseada em dados não usados na escolha, o pipeline teria colocado em produção versões que erram mais. Pela mesma razão, não alteramos o limiar de 1% depois de ver o ganho de 0,8% da última candidata.</p>
+  <p>Por fim, os <em>foundation models</em> se mostraram competitivos sem nenhum treino com os dados do projeto e com custo de inferência menor que o de vários modelos estatísticos ajustados série a série. O Chronos-2 foi o único modelo que aproveitou o clima como covariável.</p>
+</div>
+
+<h2><span class="num">7</span>Limitações e trabalhos futuros</h2>
+<div class="texto">
+  <ul>
+    <li><strong>Um único mercado.</strong> Só a CEASA-GO chega à camada gold. Incluir MG, ES, SC e MS daria mais séries aos modelos globais e permitiria usar preços de outros mercados como sinal antecedente.</li>
+    <li><strong>Holdout curto.</strong> Quatro cortes (16 semanas) não permitem testes estatísticos robustos entre modelos. Um teste de Diebold–Mariano e mais cortes de holdout dariam mais segurança às promoções.</li>
+    <li><strong>Clima de uma cidade.</strong> O clima de Goiânia não representa necessariamente as regiões produtoras. Restringir o clima aos grupos de produtos frescos e usar o clima das regiões de origem são extensões naturais.</li>
+    <li><strong>Previsão pontual.</strong> O pipeline publica apenas a mediana. Os modelos Chronos já produzem quantis, o que permitiria publicar intervalos de previsão.</li>
+    <li><strong>Campeão por horizonte.</strong> A simulação da seção 5.5 indica ganho de 1,8% no holdout. O próximo passo é incluí-la como segunda candidata, ao lado da escolha por série.</li>
+    <li><strong>Optuna.</strong> A busca de hiperparâmetros deveria usar apenas dados recentes ou ser removida, pois custa 55% do tempo da execução e piorou o modelo.</li>
+  </ul>
+</div>
+
+<h2><span class="num">8</span>Conclusão</h2>
+<div class="texto">
+  <p>Construímos um pipeline de MLOps que roda sozinho na GCP, registra cada decisão e custa centavos por execução. Na comparação de 13 modelos, o Naive se mostrou um adversário difícil, e o Chronos-2 com clima foi o único modelo a superá-lo no período completo e no holdout, com ganho que chega a 11,7% em 4 semanas. A regra champion–challenger manteve o Naive em produção nas três execuções, de forma justificada pelos dados, e a estratégia de campeão por horizonte é a candidata mais promissora para a próxima versão.</p>
+</div>
+
+<h2><span class="num">A</span>Apêndice: operação</h2>
+<div class="texto">
+  <p>Código em <code>mlops/</code> (configuração em <code>config/treino.yaml</code>, módulos em <code>pipeline/</code>). Recursos: Cloud Run Job <code>treino-precos</code>, Cloud Scheduler <code>treino-precos-diario</code> (<code>0 7 * * *</code>, America/Sao_Paulo), conta de serviço <code>airflow-mlops</code> e dataset <code>pdm-ceasa.mlops</code>. Comandos úteis:</p>
+  <ul>
+    <li>Rodar agora: <code>gcloud scheduler jobs run treino-precos-diario --location us-central1</code></li>
+    <li>Forçar treino sem dados novos: <code>gcloud run jobs execute treino-precos --region us-central1 "--args=pipeline.treinar,--forcar"</code></li>
+    <li>Rollback: <code>gcloud run jobs execute treino-precos --region us-central1 "--args=pipeline.rollback,--versao,&lt;versao_id&gt;"</code></li>
+    <li>Previsões atuais: <code>SELECT * FROM mlops.previsoes_atuais</code></li>
+  </ul>
+</div>
+
+<h2>Referências</h2>
+<ol class="refs">
+  <li>Ansari, A. F. et al. <i>Chronos: Learning the Language of Time Series.</i> Transactions on Machine Learning Research, 2024.</li>
+  <li>Ansari, A. F. et al. <i>Chronos-2: From Univariate to Universal Forecasting.</i> Relatório técnico, Amazon, 2025.</li>
+  <li>Hyndman, R. J.; Athanasopoulos, G. <i>Forecasting: Principles and Practice.</i> 3ª ed. OTexts, 2021.</li>
+  <li>Hyndman, R. J.; Koehler, A. B. Another look at measures of forecast accuracy. <i>International Journal of Forecasting</i>, 22(4), 2006.</li>
+  <li>Tashman, L. J. Out-of-sample tests of forecasting accuracy: an analysis and review. <i>International Journal of Forecasting</i>, 16(4), 2000.</li>
+  <li>Ke, G. et al. LightGBM: A Highly Efficient Gradient Boosting Decision Tree. <i>NeurIPS</i>, 2017.</li>
+  <li>Akiba, T. et al. Optuna: A Next-generation Hyperparameter Optimization Framework. <i>KDD</i>, 2019.</li>
+  <li>Diebold, F. X.; Mariano, R. S. Comparing Predictive Accuracy. <i>Journal of Business &amp; Economic Statistics</i>, 13(3), 1995.</li>
+  <li>Nixtla. <i>statsforecast</i> e <i>mlforecast</i>: bibliotecas de previsão de séries temporais em Python.</li>
+  <li>Google Cloud. Preços do Cloud Run e do Vertex AI, consultados em outubro de 2026.</li>
+</ol>
+
+<p class="rodape">Todos os números deste relatório vêm das tabelas do dataset <code>pdm-ceasa.mlops</code> geradas pelas execuções de 16/10/2026. Os custos do Vertex AI são estimativas pela tabela de preços, não medições.</p>
+
+</article>

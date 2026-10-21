@@ -1,0 +1,117 @@
+# Configuração do job de treino, seleção do campeão e previsão.
+# Tudo que muda o resultado de uma execução fica aqui e é gravado em mlops.execucoes.
+# Problema atual: preço diário por kg em todas as CEASAs, previsto 3, 7 e 14 dias à frente.
+# (A configuração semanal anterior, só da CEASA-GO, está em semanal_go.yaml.)
+
+projeto: pdm-ceasa
+dataset_mlops: mlops          # dataset onde o pipeline grava resultados
+local_bq: US                  # mesma região dos datasets bronze/silver/gold
+fuso: America/Sao_Paulo
+
+fonte:
+  tipo: silver_unificado            # silver_unificado | analitica_semanal
+  tabela: silver.ceasa_unificado    # união das tabelas silver.ceasa_<estado>, nomes de produto padronizados
+  coluna_preco: preco_comum         # R$ por kg
+  ceasas: [GO, MG, ES, SC, MS]      # todas; cada série usa o período que tiver
+  data_inicio: "2010-01-01"
+  frequencia: D                     # diária (todos os dias do calendário)
+  min_periodos: 730                 # série precisa de 2 anos contínuos
+  sazonalidade: 365                 # ciclo anual (SeasonalNaive e Theta)
+
+clima:
+  # Médias móveis do clima do estado de cada CEASA, já calculadas na silver (janela termina no
+  # próprio dia, sem olhar o futuro). Para prever até 14 dias à frente, cada dia previsto recebe
+  # o clima de 14 dias antes, que já é conhecido no dia da previsão.
+  colunas: [temp_media_60d, umidade_media_60d, nebulosidade_media_60d, precipitacao_mm_60d, vento_max_kmh_60d]
+  defasagem: 14                     # em dias; precisa ser >= maior horizonte
+
+validacao:
+  horizontes: [3, 7, 14]  # dias à frente avaliados no walk-forward
+  # Previsões publicadas: cada um dos próximos 14 dias, para a aplicação deixar escolher a data.
+  # (Os LightGBM diretos só treinam os horizontes avaliados, então publicam só 3, 7 e 14.)
+  horizontes_previsao: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+  janelas: 13             # cortes do walk-forward (com 26 cortes a execução passava de 2 horas)
+  passo: 28               # dias entre cortes -> 13 x 28 = avalia o último ano
+  janelas_holdout: 4      # os 4 últimos cortes (16 semanas) só decidem a promoção
+
+campeao:
+  # Modelo em produção definido pela equipe: substitui a escolha automática do champion–challenger
+  # (que manteria o Naive). O pipeline continua registrando como ele se sai contra o Naive no holdout.
+  # Escolhido pelos experimentos de janela (out/2026): com 5 anos de contexto, o Chronos2 ganhou do
+  # Naive no geral (+2,1%), no holdout (+3,6%) e nos três horizontes. Apague a linha para voltar
+  # à escolha automática.
+  modelo_fixo: Chronos2
+  margem_serie: 0.03       # numa série, um modelo só substitui o Naive se errar 3% menos na seleção
+  limiar_promocao: 0.01    # a versão candidata só vai para produção se errar 1% menos que a atual no holdout
+
+estatisticos:
+  janela_treino: 1095      # usa os últimos 3 anos de cada série (ARIMA, ETS e Theta ficam lentos com 16 anos diários)
+
+features_ml:
+  lags: [1, 2, 3, 7, 14, 28, 364]
+  medias_moveis: [7, 28]
+  datas: [dayofweek, month, semana_do_ano]
+  janela_treino: 1095      # últimos 3 anos de cada série no treino dos modelos de ML
+
+modelos:
+  # Estatísticos (statsforecast): um modelo por série.
+  Naive:         {ativo: true}                  # repete o último preço (baseline / campeão padrão)
+  SeasonalNaive: {ativo: true}                  # repete o preço de 1 ano antes
+  ARIMA:         {ativo: true, janela_treino: 1825}   # AutoARIMA sem sazonalidade; 5 anos (melhor nos experimentos)
+  SARIMA:        {ativo: false}                 # desativado: lento e nunca ganhou do Naive na versão semanal
+  ETS:           {ativo: true}                  # suavização exponencial
+  Theta:         {ativo: true}                  # Theta com decomposição sazonal anual
+
+  # Machine learning (mlforecast): um modelo global para todas as séries.
+  LightGBM:
+    ativo: true
+    tipo: lightgbm
+    estrategia: recursiva     # um modelo; a previsão de cada dia vira entrada do dia seguinte
+    clima: false
+    params: &lgb_params
+      n_estimators: 400
+      learning_rate: 0.03
+      num_leaves: 31
+      min_child_samples: 20
+      subsample: 0.8
+      subsample_freq: 1
+      colsample_bytree: 0.8
+      random_state: 42
+      verbosity: -1
+  LightGBM_direto:
+    ativo: true
+    tipo: lightgbm
+    estrategia: direta        # um modelo para cada horizonte avaliado (3, 7 e 14 dias)
+    clima: false
+    params: *lgb_params
+  LightGBM_clima:
+    ativo: true
+    tipo: lightgbm
+    estrategia: direta
+    clima: true
+    params: *lgb_params
+  LightGBM_otimizado:
+    ativo: true
+    tipo: lightgbm
+    estrategia: direta
+    clima: true
+    params: *lgb_params
+    otimizar:                 # Optuna, usando só dados anteriores ao 1º corte do walk-forward
+      trials: 10
+      janelas: 3
+      timeout_s: 900
+  Ridge:
+    ativo: true
+    tipo: ridge
+    estrategia: recursiva
+    clima: false
+    params:
+      alpha: 1.0
+
+  # Foundation models (Chronos, Amazon): pré-treinados, previsão zero-shot, rodam em CPU.
+  # Os pesos são baixados no build da imagem (ver Dockerfile). contexto = dias de histórico que o
+  # modelo recebe: nos experimentos de janela, 4 a 5 anos foi o ponto em que o Chronos parou de melhorar.
+  Chronos2:       {ativo: true, tipo: chronos, repo: amazon/chronos-2, contexto: 1825, lote: 128}
+  Chronos2_clima: {ativo: true, tipo: chronos, repo: amazon/chronos-2, contexto: 1825, lote: 128, clima: true}
+  ChronosBolt:    {ativo: true, tipo: chronos, repo: amazon/chronos-bolt-base, contexto: 1825, lote: 128}
+  ChronosT5:      {ativo: false, tipo: chronos, repo: amazon/chronos-t5-small}   # desativado: lento e o pior Chronos

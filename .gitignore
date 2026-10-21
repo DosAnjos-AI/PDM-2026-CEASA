@@ -3,3 +3,8 @@
 *.pem
 *.key
 credentials*.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/

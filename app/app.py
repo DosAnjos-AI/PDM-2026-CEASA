@@ -16,7 +16,7 @@ paginas = st.navigation([
 with st.sidebar:
     st.caption(
         "Previsão do preço por kg de hortifrútis nas CEASAs de GO, MG, ES, SC e MS, até 14 dias à frente. "
-        "As previsões se atualizam sozinhas quando chega dado novo (Pub/Sub, a cada dia útil), e os "
+        "As previsões se atualizam sozinhas sempre que a silver recebe dados novos (Pub/Sub), e os "
         "modelos são reavaliados toda terça-feira pelo pipeline de MLOps no Cloud Run."
     )
     # As consultas ficam 10 minutos em cache; o botão busca no BigQuery o que acabou de chegar.

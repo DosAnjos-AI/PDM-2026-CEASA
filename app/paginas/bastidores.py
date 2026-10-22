@@ -41,9 +41,9 @@ if imagem.exists():
     st.image(str(imagem), width="stretch")
 st.info(
     "**Treino semanal:** o agendador dispara a avaliação completa dos modelos toda terça-feira às 16:00.  \n"
-    "**Inferência diária:** quando a ingestão termina, ela publica um aviso no tópico do Pub/Sub "
-    "`ceasa-dados-atualizados`; o Eventarc chama um Workflow, que roda só a previsão com o modelo em produção. "
-    "Se os dados não mudaram, o job encerra em cerca de 1 minuto."
+    "**Inferência diária:** sempre que a `silver.ceasa_unificado` é regravada, um coletor de logs publica um "
+    "aviso no tópico do Pub/Sub `ceasa-dados-atualizados`; o Eventarc chama um Workflow, que roda só a previsão "
+    "com o modelo em produção. Se os dados não mudaram, o job encerra em cerca de 1 minuto."
 )
 
 # Decisões do champion–challenger

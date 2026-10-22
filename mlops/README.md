@@ -139,12 +139,17 @@ O treino completo (13 modelos, walk-forward, decisão do campeão) roda toda ter
 outro, as previsões são refeitas **sempre que chega dado novo**, com o modelo em produção:
 
 ```
-ingestão do grupo (ciclo-ceasa) termina
-  └─► publica um aviso no tópico ceasa-dados-atualizados
-        └─► Eventarc chama o Workflow inferencia-diaria
-              └─► executa o job treino-precos com "pipeline.prever" (só previsão, ~5 min)
-                    └─► grava as previsões novas em mlops.previsoes; a aplicação mostra na hora
+a silver.ceasa_unificado é regravada (na mão ou por um job)
+  └─► o log de auditoria do BigQuery registra a gravação
+        └─► o coletor de logs mlops-silver-unificada-atualizada publica no tópico ceasa-dados-atualizados
+              └─► Eventarc chama o Workflow inferencia-diaria
+                    └─► executa o job treino-precos com "pipeline.prever" (só previsão, ~5 min)
+                          └─► grava as previsões novas em mlops.previsoes; a aplicação mostra na hora
 ```
+
+Quem publica o aviso é o próprio Google Cloud (o coletor de logs filtra, no log de auditoria, as
+gravações bem-sucedidas da `silver.ceasa_unificado`). Por isso **a ingestão não precisa mudar nada**:
+funciona com a montagem feita na mão hoje e vai funcionar quando ela for automatizada.
 
 - `pipeline.prever` usa a versão em produção (ou `campeao.modelo_fixo`) e os hiperparâmetros do último
   treino. Se os dados não mudaram desde a última previsão publicada, encerra sem fazer nada.
@@ -156,8 +161,9 @@ ingestão do grupo (ciclo-ceasa) termina
 - O treino semanal só compara a versão dos dados com outros treinos (coluna `tipo` de
   `mlops.execucoes`), então a inferência diária não faz o retreino de terça ser pulado.
 
-**O que a ingestão precisa fazer:** publicar o aviso quando terminar de atualizar a silver. A conta
-`ciclo-ceasa` já tem permissão de publicar no tópico. Em shell:
+**Publicar o aviso por conta própria (opcional):** qualquer processo pode publicar no tópico, por
+exemplo a ingestão ao terminar; a conta `ciclo-ceasa` já tem permissão. Avisos repetidos não causam
+problema: se os dados não mudaram, a inferência encerra em cerca de 1 minuto. Em shell:
 
 ```bash
 gcloud pubsub topics publish ceasa-dados-atualizados --project pdm-ceasa \
@@ -242,6 +248,7 @@ gcloud run jobs deploy treino-precos --source . --region us-central1 --project p
 | Cloud Scheduler | `treino-precos-semanal` (`0 16 * * 2`, America/Sao_Paulo) |
 | Pub/Sub | tópico `ceasa-dados-atualizados` e fila de erros `ceasa-dados-atualizados-dlq` (+ assinatura `-dlq-sub`) |
 | Eventarc + Workflows | gatilho e workflow `inferencia-diaria`, com a conta `inferencia-diaria` |
+| Cloud Logging | coletor `mlops-silver-unificada-atualizada` (log de auditoria do BigQuery → tópico) |
 | Cloud Monitoring | alertas "job treino-precos falhou" e "CEASA sem dados novos"; orçamento de US$ 5/mês na conta de faturamento |
 | Cloud Run Service | `app-precos` (aplicação Streamlit, ver [../app](../app)) |
 | Contas de serviço | `airflow-mlops` (pipeline: BigQuery + `run.invoker` no job) e `app-precos` (aplicação: só leitura) |

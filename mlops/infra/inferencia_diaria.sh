@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Inferência diária orientada a eventos (idempotente: reexecutar não duplica nada).
 #
-#   ingestão (ciclo-ceasa) --publica--> tópico ceasa-dados-atualizados
-#       --Eventarc--> Workflow inferencia-diaria --executa--> job treino-precos com "pipeline.prever"
+#   silver.ceasa_unificado regravada --log de auditoria--> coletor de logs --publica-->
+#   tópico ceasa-dados-atualizados --Eventarc--> Workflow inferencia-diaria
+#       --executa--> job treino-precos com "pipeline.prever"
 #
 # Uso (de dentro da pasta mlops, com credenciais de quem administra o projeto):
 #     bash infra/inferencia_diaria.sh
@@ -45,9 +46,30 @@ gcloud pubsub topics describe "$DLQ" --project "$PROJETO" >/dev/null 2>&1 ||
 gcloud pubsub subscriptions describe "${DLQ}-sub" --project "$PROJETO" >/dev/null 2>&1 ||
     gcloud pubsub subscriptions create "${DLQ}-sub" --topic "$DLQ" --project "$PROJETO"
 
-# A ingestão do grupo pode publicar no tópico
+# A ingestão do grupo pode publicar no tópico (opcional: o coletor de logs abaixo já publica)
 gcloud pubsub topics add-iam-policy-binding "$TOPICO" --project "$PROJETO" \
     --member "serviceAccount:$CONTA_INGESTAO" --role roles/pubsub.publisher --format none
+
+# Coletor de logs: publica no tópico sempre que a silver.ceasa_unificado é regravada com sucesso,
+# seja na mão ou por um job, a partir do log de auditoria do BigQuery. Assim ninguém precisa
+# mudar o código da ingestão para disparar a inferência.
+COLETOR="mlops-silver-unificada-atualizada"
+TABELA="projects/${PROJETO}/datasets/silver/tables/ceasa_unificado"
+FILTRO="resource.type=\"bigquery_project\" \
+AND logName=\"projects/${PROJETO}/logs/cloudaudit.googleapis.com%2Fdata_access\" \
+AND protoPayload.metadata.jobChange.after=\"DONE\" \
+AND (protoPayload.metadata.jobChange.job.jobConfig.queryConfig.destinationTable=\"${TABELA}\" \
+OR protoPayload.metadata.jobChange.job.jobConfig.loadConfig.destinationTable=\"${TABELA}\") \
+AND NOT protoPayload.metadata.jobChange.job.jobStatus.errorResult:*"
+# A conta de serviço do Cloud Logging só existe depois de pedida (primeiro coletor do projeto)
+gcloud beta services identity create --service=logging.googleapis.com --project "$PROJETO" >/dev/null
+gcloud logging sinks describe "$COLETOR" --project "$PROJETO" >/dev/null 2>&1 ||
+    gcloud logging sinks create "$COLETOR" "pubsub.googleapis.com/projects/${PROJETO}/topics/${TOPICO}" \
+        --project "$PROJETO" --log-filter "$FILTRO" \
+        --description "Publica em ${TOPICO} quando a silver.ceasa_unificado é regravada (inferência diária do MLOps)"
+ESCRITOR="$(gcloud logging sinks describe "$COLETOR" --project "$PROJETO" --format 'value(writerIdentity)')"
+gcloud pubsub topics add-iam-policy-binding "$TOPICO" --project "$PROJETO" \
+    --member "$ESCRITOR" --role roles/pubsub.publisher --format none
 
 # Workflow e gatilho
 gcloud workflows deploy "$WORKFLOW" --location "$REGIAO" --project "$PROJETO" \

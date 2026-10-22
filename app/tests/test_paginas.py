@@ -40,9 +40,9 @@ def test_previsoes_mostra_o_modelo_em_producao_e_a_data_escolhida():
     assert any(rotulo.startswith("Previsão oficial para") for rotulo in metricas)
 
 
-def test_previsoes_diz_que_veio_da_atualizacao_diaria():
+def test_previsoes_diz_que_veio_da_atualizacao_pelo_pubsub():
     legendas = " ".join(c.value for c in abrir("previsoes").caption)
-    assert "atualização diária" in legendas
+    assert "atualização disparada pelo Pub/Sub" in legendas
 
 
 def test_app_principal_abre_e_o_botao_atualizar_funciona():

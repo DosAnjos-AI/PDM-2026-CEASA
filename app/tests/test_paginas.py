@@ -40,6 +40,19 @@ def test_previsoes_mostra_o_modelo_em_producao_e_a_data_escolhida():
     assert any(rotulo.startswith("Previsão oficial para") for rotulo in metricas)
 
 
+def test_previsoes_diz_que_veio_da_atualizacao_diaria():
+    legendas = " ".join(c.value for c in abrir("previsoes").caption)
+    assert "atualização diária" in legendas
+
+
+def test_app_principal_abre_e_o_botao_atualizar_funciona():
+    at = AppTest.from_file(str(PAGINAS.parent / "app.py"), default_timeout=60)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    at.button[0].click().run()
+    assert not at.exception, [e.value for e in at.exception]
+
+
 def test_previsoes_avisa_quando_a_ceasa_esta_atrasada():
     at = abrir("previsoes", ceasa_escolhida="MS", produto_escolhido="tomate_longa_vida")
     assert any("vão só até 02/10/2026" in aviso.value for aviso in at.warning)

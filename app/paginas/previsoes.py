@@ -16,9 +16,14 @@ if execucao is None or prev.empty:
 
 cfg = dados.config_da_execucao(execucao)
 h_max = int(prev["horizonte"].max())
+origem = {
+    "inferencia": "atualização diária, disparada pela chegada de dado novo (Pub/Sub)",
+    "treino": "treino semanal",
+}.get(dados.tipo_da_execucao(prev["run_id"].iloc[0]), "execução do pipeline")
 st.caption(
     f"Preço comum em {f.unidade(cfg)} · previsões para até {f.rotulo_horizonte(h_max, cfg)} à frente · "
-    f"geradas em {f.data_hora_local(prev['gerado_em'].max())}"
+    f"geradas em {f.data_hora_local(prev['gerado_em'].max())} com dados até {f.data(prev['ultima_semana'].max())} "
+    f"({origem})"
 )
 
 uid = componentes.escolher_serie(sorted(prev["unique_id"].unique()), "previsoes")

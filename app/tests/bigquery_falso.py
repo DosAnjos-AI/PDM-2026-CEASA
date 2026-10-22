@@ -75,12 +75,12 @@ ULTIMA_EXECUCAO = pd.DataFrame([{
 EXECUCOES = pd.DataFrame([
     {"run_id": RUN, "inicio": pd.Timestamp("2026-10-21 14:53", tz="UTC"), "fim": pd.Timestamp("2026-10-21 15:25", tz="UTC"),
      "status": "sucesso", "origem": "treino-precos-teste", "versao_codigo": "teste", "ultima_semana": FIM,
-     "series_usadas": 4, "decisao": "fixada", "erro": None, "experimento": None, "segundos_cobrados": 1974,
-     "custo_usd": 0.46},
+     "series_usadas": 4, "decisao": "fixada", "erro": None, "experimento": None, "tipo": "treino",
+     "segundos_cobrados": 1974, "custo_usd": 0.46},
     {"run_id": "20261020T000000_teste", "inicio": pd.Timestamp("2026-10-20 19:00", tz="UTC"),
      "fim": pd.Timestamp("2026-10-20 19:01", tz="UTC"), "status": "sem_dados_novos", "origem": "treino-precos-teste",
      "versao_codigo": "teste", "ultima_semana": FIM, "series_usadas": 4, "decisao": None, "erro": None,
-     "experimento": None, "segundos_cobrados": 120, "custo_usd": 0.03},
+     "experimento": None, "tipo": "inferencia", "segundos_cobrados": 120, "custo_usd": 0.03},
 ])
 VERSOES = pd.DataFrame([{
     "versao_id": RUN, "criado_em": pd.Timestamp("2026-10-21 15:24", tz="UTC"), "n_series": 4,
@@ -104,6 +104,8 @@ def consultar(sql: str, **params) -> pd.DataFrame:
         return METRICAS_SERIE
     if "metricas" in s:
         return METRICAS
+    if "execucoes" in s and "@run_id" in s:
+        return pd.DataFrame({"tipo": ["inferencia"]})   # previsões atuais vieram da inferência diária
     if "custo_execucoes" in s:
         return EXECUCOES
     if "execucoes" in s:

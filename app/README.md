@@ -13,6 +13,11 @@ No ar em: https://app-precos-502988692211.us-central1.run.app
 | Comparação de modelos | Ganho de cada modelo sobre o Naive, no geral, por horizonte e por CEASA (mapa de calor) |
 | Bastidores do MLOps | Versão em produção, decisões do champion–challenger, execuções (inclusive experimentos), custos e tempo de cada modelo |
 
+As previsões mostradas são sempre as mais recentes em `mlops.previsoes`: quando a inferência diária
+(Pub/Sub) publica previsões novas, elas aparecem em até 10 minutos (o tempo de cache das consultas),
+ou na hora com o botão **Atualizar dados** da barra lateral. A página de previsões diz se elas vieram
+da atualização diária ou do treino semanal.
+
 A aplicação lê a configuração gravada pela última execução de produção e se adapta a ela: com a
 configuração atual mostra o preço diário por kg das 5 CEASAs; com execuções antigas (até a v0.4)
 mostra o preço semanal por embalagem da CEASA-GO. Experimentos (`--experimento`) não aparecem nas

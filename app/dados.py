@@ -71,6 +71,13 @@ def tempos_da_execucao(execucao: pd.Series) -> dict:
     return json.loads(execucao["tempos_s"] or "{}")
 
 
+def tipo_da_execucao(run_id: str) -> str:
+    """treino (avaliação semanal), inferencia (atualização diária pelo Pub/Sub) ou desconhecido."""
+    df = _consultar(f"SELECT IFNULL(tipo, 'treino') AS tipo FROM {MLOPS}.execucoes WHERE run_id = @run_id",
+                    run_id=run_id)
+    return df.iloc[0]["tipo"] if not df.empty else "desconhecido"
+
+
 def producao_atual() -> str:
     df = _consultar(f"SELECT versao_id FROM {MLOPS}.producao_atual")
     return "naive" if df.empty else df.iloc[0]["versao_id"]
@@ -175,7 +182,8 @@ def metricas_serie(run_id: str) -> pd.DataFrame:
 def execucoes() -> pd.DataFrame:
     return _consultar(f"""
         SELECT e.run_id, e.inicio, e.fim, e.status, e.origem, e.versao_codigo, e.ultima_semana,
-               e.series_usadas, e.decisao, e.erro, e.experimento, c.segundos_cobrados, c.custo_usd
+               e.series_usadas, e.decisao, e.erro, e.experimento, IFNULL(e.tipo, 'treino') AS tipo,
+               c.segundos_cobrados, c.custo_usd
         FROM {MLOPS}.execucoes e
         LEFT JOIN {MLOPS}.custo_execucoes c USING (run_id)
         ORDER BY e.inicio DESC

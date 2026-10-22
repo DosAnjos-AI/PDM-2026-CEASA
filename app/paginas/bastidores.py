@@ -39,8 +39,12 @@ k4.metric("Custo total estimado", f"US$ {execs['custo_usd'].sum():.2f}".replace(
 imagem = Path(__file__).resolve().parent.parent / "assets" / "arquitetura.png"
 if imagem.exists():
     st.image(str(imagem), width="stretch")
-st.info("O agendador dispara o pipeline **toda terça-feira às 16:00**, depois da ingestão de segunda. "
-        "Se os dados não mudaram desde a última execução, o job encerra em cerca de 1 minuto.")
+st.info(
+    "**Treino semanal:** o agendador dispara a avaliação completa dos modelos toda terça-feira às 16:00.  \n"
+    "**Inferência diária:** quando a ingestão termina, ela publica um aviso no tópico do Pub/Sub "
+    "`ceasa-dados-atualizados`; o Eventarc chama um Workflow, que roda só a previsão com o modelo em produção. "
+    "Se os dados não mudaram, o job encerra em cerca de 1 minuto."
+)
 
 # Decisões do champion–challenger
 st.subheader("Decisões do champion–challenger")
@@ -77,9 +81,10 @@ if not execs.empty:
     e["Duração (min)"] = (pd.to_datetime(e["fim"]) - pd.to_datetime(e["inicio"])).dt.total_seconds() / 60
     e["Disparada por"] = e["origem"].map(lambda o: "local" if o == "local" else "Cloud Run")
     st.dataframe(
-        e[["Início", "status", "experimento", "versao_codigo", "ultima_semana", "decisao", "Duração (min)", "custo_usd", "erro"]],
+        e[["Início", "tipo", "status", "experimento", "versao_codigo", "ultima_semana", "decisao", "Duração (min)", "custo_usd", "erro"]],
         hide_index=True, width="stretch",
         column_config={
+            "tipo": st.column_config.TextColumn("Tipo", help="treino (semanal), inferencia (diária, Pub/Sub) ou verificacao"),
             "status": "Status",
             "experimento": st.column_config.TextColumn("Experimento", help="Execuções de teste não mexem na produção"),
             "versao_codigo": "Versão do código",

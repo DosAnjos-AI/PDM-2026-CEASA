@@ -17,7 +17,7 @@ if execucao is None or prev.empty:
 cfg = dados.config_da_execucao(execucao)
 h_max = int(prev["horizonte"].max())
 origem = {
-    "inferencia": "atualização diária, disparada pela chegada de dado novo (Pub/Sub)",
+    "inferencia": "atualização diária disparada pelo Pub/Sub quando chega dado novo",
     "treino": "treino semanal",
 }.get(dados.tipo_da_execucao(prev["run_id"].iloc[0]), "execução do pipeline")
 st.caption(

@@ -25,6 +25,9 @@ clima:
   colunas: [temp_media_60d, umidade_media_60d, nebulosidade_media_60d, precipitacao_mm_60d, vento_max_kmh_60d]
   defasagem: 14                     # em dias; precisa ser >= maior horizonte
 
+alertas:
+  dias_sem_dados: 7       # CEASA sem dado novo há mais de 7 dias gera ALERTA_DADOS_ATRASADOS no log
+
 validacao:
   horizontes: [3, 7, 14]  # dias à frente avaliados no walk-forward
   # Previsões publicadas: cada um dos próximos 14 dias, para a aplicação deixar escolher a data.

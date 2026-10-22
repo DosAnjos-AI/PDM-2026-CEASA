@@ -52,6 +52,8 @@ def main() -> None:
     args.add_argument("--janela-anos", type=float,
                       help="usa a mesma janela de histórico (em anos) em todos os modelos que treinam: "
                            "estatísticos, ML e contexto do Chronos")
+    args.add_argument("--so-verificar", action="store_true",
+                      help="só lê os dados e roda as checagens (ex.: CEASA atrasada), sem treinar")
     args = args.parse_args()
 
     with open(args.config, encoding="utf-8") as f:
@@ -80,6 +82,7 @@ def main() -> None:
     try:
         hoje = datetime.now(ZoneInfo(cfg["fuso"])).date()
         brutos, clima_bruto = dados.carregar(cliente, cfg, hoje)
+        dados.verificar_atraso(brutos, cfg, hoje)
         df, resumo = dados.selecionar_series(brutos, cfg)
         if args.amostra:
             df = df[df["unique_id"].isin(df["unique_id"].unique()[: args.amostra])]
@@ -90,6 +93,10 @@ def main() -> None:
             series_usadas=resumo["series_usadas"],
             linhas=resumo["linhas"],
         )
+
+        if args.so_verificar:
+            execucao["status"] = "verificacao"
+            return
 
         producao = not args.experimento
         if registro and producao and not args.forcar and execucao["versao_dados"] == registro.ultima_versao_dados():

@@ -84,6 +84,24 @@ def descartar_semana_incompleta(df: pd.DataFrame, hoje: date) -> pd.DataFrame:
     return df[fechada]
 
 
+def verificar_atraso(df: pd.DataFrame, cfg: dict, hoje: date) -> dict[str, int]:
+    """CEASAs cujo último dado é mais antigo que alertas.dias_sem_dados.
+
+    Cada uma gera no log uma linha com ALERTA_DADOS_ATRASADOS, que dispara o alerta configurado
+    no Cloud Monitoring (ver infra/alertas). Devolve {CEASA: dias sem dados}.
+    """
+    limite = cfg.get("alertas", {}).get("dias_sem_dados")
+    if not limite:
+        return {}
+    ultimas = df.groupby(df["unique_id"].map(lambda u: grupo(u, cfg)))["ds"].max()
+    dias = (pd.Timestamp(hoje) - ultimas).dt.days
+    atrasadas = {g: int(n) for g, n in dias.items() if n > limite}
+    for g, n in atrasadas.items():
+        log.warning("ALERTA_DADOS_ATRASADOS: CEASA %s sem dados há %d dias (último dado em %s; limite de %d dias)",
+                    g, n, ultimas[g].date(), limite)
+    return atrasadas
+
+
 def selecionar_series(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
     """Mantém as séries ainda cotadas, cortadas no último trecho sem buracos.
 
@@ -126,8 +144,10 @@ def preparar_clima(cliente: bigquery.Client, cfg: dict, df: pd.DataFrame,
     Cobre o histórico de cada série e os períodos futuros a prever, de modo que tanto o treino
     quanto a previsão só usem clima já conhecido no dia da previsão.
     """
-    ccfg, d = cfg["clima"], passo(cfg)
-    defasagem, h = ccfg["defasagem"], max(cfg["validacao"]["horizontes"])
+    ccfg, d, val = cfg["clima"], passo(cfg), cfg["validacao"]
+    defasagem = ccfg["defasagem"]
+    # Maior horizonte entre os avaliados e os publicados: a previsão final pode ir além da avaliação.
+    h = max([*val["horizontes"], *val.get("horizontes_previsao", [])])
     if defasagem < h:
         raise ValueError("clima.defasagem precisa ser >= maior horizonte para não usar clima futuro")
 

@@ -133,6 +133,42 @@ operador de lista e o job recebe todos os argumentos grudados.
 O rollback só troca a versão em produção. As novas previsões saem na próxima execução que
 tiver dados novos, ou na hora com `--forcar`.
 
+## Alertas e orçamento
+
+| Alerta | Quando dispara | Como foi criado |
+|---|---|---|
+| MLOps: job treino-precos falhou | Uma execução do job termina com erro | [infra/alertas.py](infra/alertas.py) |
+| MLOps: CEASA sem dados novos | Alguma CEASA passou de `alertas.dias_sem_dados` (7) dias sem dado novo; o job escreve `ALERTA_DADOS_ATRASADOS` no log | [infra/alertas.py](infra/alertas.py) |
+| Orçamento pdm-ceasa: US$ 5 por mês | O gasto do mês passa de 50%, 90% e 100% de US$ 5 (só avisa, não bloqueia) | `gcloud billing budgets create` (conta de faturamento) |
+
+Os e-mails ficam nos canais de notificação `MLOps: <email>`. Para criar ou atualizar os alertas
+(reexecutar não duplica):
+
+```powershell
+python infra/alertas.py --email pessoa@exemplo.com --email outra@exemplo.com
+```
+
+Para checar os dados sem treinar (rápido e barato; dispara o alerta se houver CEASA atrasada):
+
+```powershell
+gcloud run jobs execute treino-precos --region us-central1 --project pdm-ceasa "--args=pipeline.treinar,--so-verificar"
+```
+
+## Testes e CI
+
+Os testes rodam sem acesso ao GCP: o pipeline usa dados sintéticos (inclusive uma CEASA atrasada e
+um produto que parou de ser cotado) e modelos falsos ou pequenos. Eles conferem, entre outras coisas,
+que o walk-forward nunca vê dado posterior ao corte, que o clima não usa o futuro, que os cortes caem
+em dia útil, que só há um campeão por série e data e que as configurações versionadas são coerentes.
+
+```powershell
+python -m pip install -r requirements-teste.txt
+pytest
+```
+
+O GitHub Actions ([../.github/workflows/testes.yml](../.github/workflows/testes.yml)) roda os testes
+do pipeline e da aplicação a cada push ou pull request que mexa em `mlops/` ou `app/`.
+
 ## Desenvolvimento
 
 Teste local rápido (não grava nada):
@@ -148,7 +184,7 @@ Deploy de uma nova versão do código (o Cloud Build monta a imagem a partir do 
 gcloud run jobs deploy treino-precos --source . --region us-central1 --project pdm-ceasa `
   --service-account airflow-mlops@pdm-ceasa.iam.gserviceaccount.com `
   --cpu 8 --memory 16Gi --task-timeout 3h --max-retries 0 `
-  --set-env-vars VERSAO_CODIGO=v0.6,N_JOBS=8
+  --set-env-vars VERSAO_CODIGO=v0.6.1,N_JOBS=8
 ```
 
 ## Infraestrutura criada

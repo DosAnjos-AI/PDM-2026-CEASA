@@ -27,6 +27,17 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
+## Testes
+
+Abrem cada página como o Streamlit faria, com o BigQuery trocado por respostas sintéticas
+([tests/bigquery_falso.py](tests/bigquery_falso.py)); qualquer tentativa de acessar o BigQuery de
+verdade faz o teste falhar. Rodam também no GitHub Actions a cada push.
+
+```powershell
+python -m pip install -r requirements.txt pytest
+pytest
+```
+
 ## Deploy
 
 ```powershell

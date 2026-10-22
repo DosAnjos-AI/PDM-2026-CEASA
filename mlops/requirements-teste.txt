@@ -1,0 +1,17 @@
+# Dependências para rodar os testes (pytest). Ficam de fora Chronos e PyTorch: os testes não
+# carregam os pesos do Chronos, e o PyTorch deixaria a instalação da CI muito mais lenta.
+statsforecast==2.1.1
+mlforecast==1.1.0
+coreforecast==0.0.18
+utilsforecast==0.2.17
+lightgbm==4.7.0
+scikit-learn==1.9.1
+pandas==2.3.3
+numpy==2.5.4
+pyarrow==26.0.0
+google-cloud-bigquery==3.46.2
+db-dtypes==1.8.0
+PyYAML==6.0.3
+optuna==4.8.0
+tzdata==2026.5
+pytest==9.1.1

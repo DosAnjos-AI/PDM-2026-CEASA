@@ -71,6 +71,7 @@ def main() -> None:
         "modelos": ",".join(modelos.ativos(cfg)),
         "config": json.dumps(cfg, ensure_ascii=False),
         "experimento": args.experimento,
+        "tipo": "verificacao" if args.so_verificar else "treino",
     }
     log.info("Execução %s (origem=%s, experimento=%s)", run_id, execucao["origem"], args.experimento)
 

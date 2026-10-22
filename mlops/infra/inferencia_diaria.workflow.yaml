@@ -1,0 +1,25 @@
+# Workflow disparado pelo Eventarc a cada mensagem no tópico ceasa-dados-atualizados.
+# Executa o job treino-precos só com a inferência (python -m pipeline.prever) e não espera ele
+# terminar: o próprio job registra o resultado em mlops.execucoes, e o alerta de falha cobre erros.
+# A mensagem não é interpretada: a inferência decide sozinha se há dado novo (versão dos dados).
+main:
+  params: [evento]
+  steps:
+    - registrar:
+        call: sys.log
+        args:
+          severity: INFO
+          text: ${"Dados atualizados; disparando a inferência. Evento recebido " + json.encode_to_string(evento)}
+    - rodar_inferencia:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: projects/pdm-ceasa/locations/us-central1/jobs/treino-precos
+          body:
+            overrides:
+              containerOverrides:
+                - args: ["pipeline.prever"]
+          connector_params:
+            skip_polling: true
+        result: operacao
+    - fim:
+        return: ${operacao}

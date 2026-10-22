@@ -133,6 +133,53 @@ operador de lista e o job recebe todos os argumentos grudados.
 O rollback só troca a versão em produção. As novas previsões saem na próxima execução que
 tiver dados novos, ou na hora com `--forcar`.
 
+## Inferência diária (Pub/Sub)
+
+O treino completo (13 modelos, walk-forward, decisão do campeão) roda toda terça. Entre um treino e
+outro, as previsões são refeitas **sempre que chega dado novo**, com o modelo em produção:
+
+```
+ingestão do grupo (ciclo-ceasa) termina
+  └─► publica um aviso no tópico ceasa-dados-atualizados
+        └─► Eventarc chama o Workflow inferencia-diaria
+              └─► executa o job treino-precos com "pipeline.prever" (só previsão, ~5 min)
+                    └─► grava as previsões novas em mlops.previsoes; a aplicação mostra na hora
+```
+
+- `pipeline.prever` usa a versão em produção (ou `campeao.modelo_fixo`) e os hiperparâmetros do último
+  treino. Se os dados não mudaram desde a última previsão publicada, encerra sem fazer nada.
+- Mensagens que falharem 5 vezes vão para o tópico `ceasa-dados-atualizados-dlq` e ficam guardadas
+  na assinatura `ceasa-dados-atualizados-dlq-sub`.
+- A infraestrutura (tópico, fila de erros, Workflow, gatilho e permissões) é criada por
+  [infra/inferencia_diaria.sh](infra/inferencia_diaria.sh); o Workflow está em
+  [infra/inferencia_diaria.workflow.yaml](infra/inferencia_diaria.workflow.yaml).
+- O treino semanal só compara a versão dos dados com outros treinos (coluna `tipo` de
+  `mlops.execucoes`), então a inferência diária não faz o retreino de terça ser pulado.
+
+**O que a ingestão precisa fazer:** publicar o aviso quando terminar de atualizar a silver. A conta
+`ciclo-ceasa` já tem permissão de publicar no tópico. Em shell:
+
+```bash
+gcloud pubsub topics publish ceasa-dados-atualizados --project pdm-ceasa \
+  --message "{\"origem\": \"ciclo-ceasa\", \"ultima_data\": \"$(date +%F)\"}"
+```
+
+Em Python (`google-cloud-pubsub`):
+
+```python
+from google.cloud import pubsub_v1
+
+publicador = pubsub_v1.PublisherClient()
+topico = publicador.topic_path("pdm-ceasa", "ceasa-dados-atualizados")
+publicador.publish(topico, b'{"origem": "ciclo-ceasa"}').result()
+```
+
+Para disparar na mão (mesmo efeito do aviso da ingestão):
+
+```powershell
+gcloud pubsub topics publish ceasa-dados-atualizados --project pdm-ceasa --message '{\"origem\":\"manual\"}'
+```
+
 ## Alertas e orçamento
 
 | Alerta | Quando dispara | Como foi criado |
@@ -184,7 +231,7 @@ Deploy de uma nova versão do código (o Cloud Build monta a imagem a partir do 
 gcloud run jobs deploy treino-precos --source . --region us-central1 --project pdm-ceasa `
   --service-account airflow-mlops@pdm-ceasa.iam.gserviceaccount.com `
   --cpu 8 --memory 16Gi --task-timeout 3h --max-retries 0 `
-  --set-env-vars VERSAO_CODIGO=v0.6.1,N_JOBS=8
+  --set-env-vars VERSAO_CODIGO=v0.7,N_JOBS=8
 ```
 
 ## Infraestrutura criada
@@ -193,6 +240,9 @@ gcloud run jobs deploy treino-precos --source . --region us-central1 --project p
 |---|---|
 | Cloud Run Job | `treino-precos` (us-central1, 8 vCPU, 16 GiB, timeout 3h) |
 | Cloud Scheduler | `treino-precos-semanal` (`0 16 * * 2`, America/Sao_Paulo) |
+| Pub/Sub | tópico `ceasa-dados-atualizados` e fila de erros `ceasa-dados-atualizados-dlq` (+ assinatura `-dlq-sub`) |
+| Eventarc + Workflows | gatilho e workflow `inferencia-diaria`, com a conta `inferencia-diaria` |
+| Cloud Monitoring | alertas "job treino-precos falhou" e "CEASA sem dados novos"; orçamento de US$ 5/mês na conta de faturamento |
 | Cloud Run Service | `app-precos` (aplicação Streamlit, ver [../app](../app)) |
 | Contas de serviço | `airflow-mlops` (pipeline: BigQuery + `run.invoker` no job) e `app-precos` (aplicação: só leitura) |
 | Imagens | Artifact Registry `cloud-run-source-deploy` |

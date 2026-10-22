@@ -1,4 +1,5 @@
 """Leitura e gravação das tabelas mlops.* do BigQuery (execuções, métricas, registry e previsões)."""
+import json
 import logging
 
 import pandas as pd
@@ -16,7 +17,7 @@ ESQUEMAS = {
         ("run_id", S), ("inicio", TS), ("fim", TS), ("status", S), ("erro", S),
         ("origem", S), ("versao_codigo", S), ("versao_dados", S), ("ultima_semana", D),
         ("series_usadas", I), ("linhas", I), ("modelos", S), ("tempos_s", S), ("config", S),
-        ("hiperparametros", S), ("decisao", S), ("experimento", S),
+        ("hiperparametros", S), ("decisao", S), ("experimento", S), ("tipo", S),
     ],
     "metricas": [
         ("run_id", S), ("modelo", S), ("horizonte", I), ("n", I),
@@ -51,6 +52,8 @@ ESQUEMAS = {
 DESCRICOES = {
     "execucoes": "Uma linha por execução do job (config, versão dos dados, status, tempos, decisão). "
                  "experimento preenchido = execução de teste, que não mexe no campeão nem nas previsões oficiais. "
+                 "tipo: treino (avaliação completa, semanal), inferencia (só previsão, diária) ou verificacao "
+                 "(só checagem dos dados); nulo nas execuções antigas, que eram todas de treino. "
                  "ultima_semana = última data com dados (dia ou semana, conforme a frequência da config).",
     "metricas": "Métricas do walk-forward por período (todas/selecao/holdout), modelo e horizonte "
                 "(em períodos da frequência da config: dias ou semanas; 0 = todos os horizontes).",
@@ -144,11 +147,30 @@ class Registro:
         self.cliente.load_table_from_dataframe(df, f"{self.dataset}.{nome}", job_config=job_cfg).result()
         log.info("Gravadas %d linhas em %s.%s", len(df), self.dataset, nome)
 
-    def ultima_versao_dados(self) -> str | None:
-        sql = (f"SELECT versao_dados FROM `{self.dataset}.execucoes` "
-               "WHERE status = 'sucesso' AND experimento IS NULL ORDER BY inicio DESC LIMIT 1")
-        linhas = list(self.cliente.query(sql).result())
+    def ultima_versao_dados(self, tipos: tuple[str, ...] = ("treino",)) -> str | None:
+        """Impressão digital dos dados da última execução de produção bem-sucedida dos tipos dados.
+
+        O treino só compara com treinos: a inferência diária processa os dados novos antes, e o
+        retreino semanal não pode achar que "não há dado novo" por causa dela.
+        """
+        sql = f"""
+            SELECT versao_dados FROM `{self.dataset}.execucoes`
+            WHERE status = 'sucesso' AND experimento IS NULL AND IFNULL(tipo, 'treino') IN UNNEST(@tipos)
+            ORDER BY inicio DESC LIMIT 1
+        """
+        job_cfg = bigquery.QueryJobConfig(query_parameters=[bigquery.ArrayQueryParameter("tipos", "STRING", list(tipos))])
+        linhas = list(self.cliente.query(sql, job_config=job_cfg).result())
         return linhas[0].versao_dados if linhas else None
+
+    def hiperparametros_do_ultimo_treino(self) -> dict:
+        """Hiperparâmetros (ex.: os do Optuna) do último treino de produção, para a inferência reusar."""
+        sql = f"""
+            SELECT hiperparametros FROM `{self.dataset}.execucoes`
+            WHERE status = 'sucesso' AND experimento IS NULL AND decisao IS NOT NULL
+            ORDER BY inicio DESC LIMIT 1
+        """
+        linhas = list(self.cliente.query(sql).result())
+        return json.loads(linhas[0].hiperparametros or "{}") if linhas else {}
 
     def campeao_atual(self) -> tuple[str, dict[str, str]]:
         """Versão em produção e o modelo de cada série. Sem promoção ainda, é o Naive em tudo."""

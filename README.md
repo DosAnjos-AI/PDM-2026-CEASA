@@ -60,6 +60,8 @@ sql/
     metricas/     previsões para o recorte de demo e conferência da tabela consolidada
 ingestao/
   upload_historico.sh   sobe o CSV histórico para o bucket (GCS, não BigQuery)
+  atualizar_clima.py    job diário da bronze de clima (Open-Meteo -> bronze.clima_historico)
+  Dockerfile, requirements.txt   imagem do Cloud Run Job clima-diario
 scripts/
   metricas_demo*.py     calcula o bloco de métricas de demo em Python (lê o recorte local)
 docs/
@@ -141,6 +143,7 @@ docs/
 | `02_inferencia_regressao_linear.sql` | `ML.PREDICT` do modelo baseline linear para um (produto, classe, data) parametrizável |
 | `03_inferencia_regressao_arvore.sql` | Idem para o modelo baseline de árvore |
 | `04_inferencia_serie_arima.sql` | `ML.FORECAST` do ARIMA baseline (horizon=4, replicado explicitamente) |
+| `05_clima_historico_check.sql` | Conferência de `bronze.clima_historico` após o job de clima: contagem por estado/fonte, chaves duplicadas, continuidade do calendário, nulos, faixa de valores, prova de que não há previsão em data já observada |
 
 ### `sql/consultas/silver/`
 
@@ -200,6 +203,66 @@ docs/
 | `ingestao/upload_historico.sh` | Sobe o CSV histórico local para `gs://pdm-ceasa-dados/raw/`; idempotente; caminho de origem via `ARQUIVO_ORIGEM` (env) com default relativo ao repositório |
 | `scripts/metricas_demo.py` | Roda `02_previsoes_demo.sql`, lê o recorte local, casa previsão×observado, calcula MAE/MSE/RMSE e grava via `UPDATE` nas 6 linhas bronze/silver de `comparacao_modelos` |
 | `scripts/metricas_demo_gold.py` | Mesma lógica para as 6 linhas gold, casando pela convenção de período (semana/mês contém a data) |
+| `ingestao/atualizar_clima.py` | Job diário de `bronze.clima_historico` (detalhes abaixo) |
+| `ingestao/Dockerfile`, `ingestao/requirements.txt` | Imagem do Cloud Run Job `clima-diario` (`python:3.12-slim` + `google-cloud-bigquery`) |
+
+### Job diário de clima (`clima-diario`)
+
+`ingestao/atualizar_clima.py` mantém em `pdm-ceasa.bronze.clima_historico`,
+para as 5 cidades (Goiânia-GO, Cariacica-ES, Contagem-MG, Campo Grande-MS,
+São José-SC), o dado **observado** até o último dia disponível no ERA5 e a
+**previsão** dali até o teto do modelo. A cada execução:
+
+1. Pede a Archive API (`models=era5`, `timezone=America/Sao_Paulo`) do dia
+   seguinte ao último observado até hoje; cada data com as 5 variáveis não
+   nulas vira observado (`fonte = 'open-meteo-archive-api/era5'`) — inclusive
+   as que eram previsão. Data ainda nula (delay do ERA5, medido em ~7 dias)
+   continua como previsão e é tentada de novo no dia seguinte.
+2. Pede a Forecast API com `best_match` (16 dias contando hoje); se falhar,
+   `ecmwf_ifs025` (15 dias). `fonte = 'open-meteo-forecast-api/<modelo>'`.
+3. Grava com um único `MERGE` por `(data, estado)`, que nunca troca observado
+   por previsão. `data_coleta` = dia da execução. Idempotente.
+
+Falha de rede/API em qualquer cidade (ou os dois modelos de previsão falhando)
+gera log `ERROR` e código de saída 1 — a execução aparece como falha no Cloud
+Run e no Cloud Logging; as cidades que deram certo são gravadas mesmo assim.
+
+**Implantação na GCP** (região `us-central1`):
+
+| Recurso | Configuração |
+|---|---|
+| Cloud Run Job `clima-diario` | Imagem construída de `ingestao/` (Cloud Build); 1 tarefa, 1 CPU, 512 MiB, timeout 600 s, `max-retries 1`; env `PROJETO=pdm-ceasa` |
+| Cloud Scheduler `clima-diario-trigger` | `0 6 * * *` em `America/Sao_Paulo` (antes do `ciclo-ceasa` das 14:00); POST no endpoint `:run` do job |
+| Conta de serviço `clima-diario@pdm-ceasa.iam.gserviceaccount.com` | `roles/bigquery.jobUser` no projeto, `roles/bigquery.dataEditor` só no dataset `bronze`, `roles/run.invoker` só no job |
+
+Operação manual (a partir da raiz do repositório):
+
+```bash
+# rodar localmente (Application Default Credentials)
+pip install -r ingestao/requirements.txt
+python ingestao/atualizar_clima.py --simular   # tudo menos gravar (MERGE em dry_run)
+python ingestao/atualizar_clima.py             # grava na bronze
+
+# reimplantar depois de alterar o script
+gcloud run jobs deploy clima-diario --source ingestao/ --region us-central1 \
+  --service-account clima-diario@pdm-ceasa.iam.gserviceaccount.com \
+  --task-timeout 600 --max-retries 1 --memory 512Mi --set-env-vars PROJETO=pdm-ceasa
+
+# executar agora no Cloud Run / ver o log
+gcloud run jobs execute clima-diario --region us-central1 --wait
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="clima-diario"' --freshness=1d
+
+# mudar horário ou pausar o agendamento
+gcloud scheduler jobs update http clima-diario-trigger --location us-central1 --schedule "0 6 * * *"
+gcloud scheduler jobs pause clima-diario-trigger --location us-central1
+```
+
+Conferência depois de uma execução: `sql/consultas/bronze/05_clima_historico_check.sql`.
+
+**Fonte dos dados de clima:** [Open-Meteo](https://open-meteo.com) — Archive
+API (reanálise ERA5, Copernicus/ECMWF) e Forecast API —, sob licença
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), uso gratuito não
+comercial, sem chave de API.
 
 ## Como executar
 

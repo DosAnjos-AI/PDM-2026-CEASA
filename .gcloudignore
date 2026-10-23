@@ -1,0 +1,6 @@
+# Upload do build com contexto na raiz (imagem atualizar-prata-ouro-diario,
+# pipelines/cloudbuild.yaml): envia so pipelines/ e sql/, nada mais.
+# Nao afeta o deploy do clima-diario (--source ingestao/ usa a propria pasta).
+/*
+!/pipelines/
+!/sql/

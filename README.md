@@ -62,6 +62,9 @@ ingestao/
   upload_historico.sh   sobe o CSV histórico para o bucket (GCS, não BigQuery)
   atualizar_clima.py    job diário da bronze de clima (Open-Meteo -> bronze.clima_historico)
   Dockerfile, requirements.txt   imagem do Cloud Run Job clima-diario
+pipelines/
+  atualizar_prata_ouro.sh   cadeia diária silver/gold (5 estados + clima) com conferência por etapa
+  Dockerfile, cloudbuild.yaml   imagem do Cloud Run Job atualizar-prata-ouro-diario
 scripts/
   metricas_demo*.py     calcula o bloco de métricas de demo em Python (lê o recorte local)
 docs/
@@ -263,6 +266,56 @@ Conferência depois de uma execução: `sql/consultas/bronze/05_clima_historico_
 API (reanálise ERA5, Copernicus/ECMWF) e Forecast API —, sob licença
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), uso gratuito não
 comercial, sem chave de API.
+
+### Cadeia diária prata/ouro (`atualizar-prata-ouro-diario`)
+
+`pipelines/atualizar_prata_ouro.sh` recria, em ordem de dependência, as 8
+tabelas do pipeline de 5 estados + clima e roda, depois de cada uma, a
+consulta de conferência correspondente:
+
+| Ordem | Construção | Conferência |
+|---|---|---|
+| 1 | `silver/09_clima_historico_bronze_to_silver.sql` | `consultas/silver/18_clima_historico_check.sql` |
+| 2–6 | `silver/10_` a `14_` (GO, SC, MS, MG, ES) | `consultas/silver/19_` a `23_` |
+| 7 | `silver/15_ceasa_unificado.sql` | `consultas/silver/24_ceasa_unificado_check.sql` |
+| 8 | `gold/06_ceasa_unificado_semanal_quinzenal.sql` | `consultas/gold/16_ceasa_unificado_semanal_quinzenal_check.sql` |
+
+Qualquer etapa (construção ou conferência) com erro interrompe a cadeia com
+log `ERROR` e código 1 — nenhuma tabela seguinte é recriada sobre dado
+incompleto. Cada script é `CREATE OR REPLACE TABLE` (rebuild total,
+idempotente). Duração medida: ~2–3,5 min.
+
+**Implantação na GCP** (região `us-central1`):
+
+| Recurso | Configuração |
+|---|---|
+| Cloud Run Job `atualizar-prata-ouro-diario` | Imagem de `pipelines/Dockerfile` (base `google-cloud-cli:589.0.0-slim`, com `sql/` copiado); 1 CPU, 512 MiB, timeout 1.800 s, `max-retries 1` |
+| Cloud Scheduler `atualizar-prata-ouro-diario-trigger` | `30 16 * * *` em `America/Sao_Paulo`, todo dia — depois do `clima-diario` (06:00) e do `ciclo-ceasa` (14:00, dias úteis, ~20 min) |
+| Conta de serviço `atualizar-prata-ouro-diario@pdm-ceasa.iam.gserviceaccount.com` | `roles/bigquery.jobUser` no projeto; `dataViewer` em `bronze`; `dataEditor` em `silver` e `gold`; `run.invoker` só no job |
+
+Os papéis nos datasets foram concedidos via `GRANT ... ON SCHEMA` (o
+`bq add-iam-policy-binding` em dataset exige allowlisting). A conta não tem
+`bigquery.datasets.create`: nenhum script da cadeia pode ter
+`CREATE SCHEMA`.
+
+Operação manual (a partir da raiz do repositório):
+
+```bash
+pipelines/atualizar_prata_ouro.sh --simular   # construção em dry_run, conferências de verdade
+pipelines/atualizar_prata_ouro.sh             # recria as 8 tabelas
+
+# reimplantar depois de alterar o script ou qualquer .sql da cadeia
+gcloud builds submit . --config pipelines/cloudbuild.yaml --region us-central1
+gcloud run jobs update atualizar-prata-ouro-diario --region us-central1 \
+  --image us-central1-docker.pkg.dev/pdm-ceasa/cloud-run-source-deploy/atualizar-prata-ouro-diario:latest
+
+# executar agora pelo agendador / ver o log
+gcloud scheduler jobs run atualizar-prata-ouro-diario-trigger --location us-central1
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="atualizar-prata-ouro-diario"' --freshness=1d
+```
+
+O upload do build (contexto na raiz) é limitado a `pipelines/` e `sql/` pelo
+`.gcloudignore` da raiz.
 
 ## Como executar
 

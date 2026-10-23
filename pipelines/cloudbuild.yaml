@@ -1,0 +1,9 @@
+# Build da imagem atualizar-prata-ouro-diario com contexto na raiz do repositorio.
+# Uso (a partir da raiz): gcloud builds submit . --config pipelines/cloudbuild.yaml
+# O que sobe no upload e controlado pelo .gcloudignore da raiz (so pipelines/ e sql/).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "pipelines/Dockerfile", "-t", "${_IMAGEM}", "."]
+images: ["${_IMAGEM}"]
+substitutions:
+  _IMAGEM: us-central1-docker.pkg.dev/pdm-ceasa/cloud-run-source-deploy/atualizar-prata-ouro-diario:latest

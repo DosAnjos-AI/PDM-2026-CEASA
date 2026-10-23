@@ -29,9 +29,6 @@
 -- dias_observados = nº de dias-base que compuseram cada média (controle de qualidade).
 -- ==============================================================================
 
-CREATE SCHEMA IF NOT EXISTS `pdm-ceasa.gold`
-OPTIONS (location = 'US');
-
 -- ------------------------------------------------------------------------------
 -- 1. SEMANAL (ISO 8601)
 -- ------------------------------------------------------------------------------

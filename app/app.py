@@ -4,7 +4,10 @@ Rodar localmente:  streamlit run app.py
 """
 import streamlit as st
 
+import estilo
+
 st.set_page_config(page_title="Preços CEASA", page_icon=":material/eco:", layout="wide")
+estilo.aplicar()
 
 paginas = st.navigation([
     st.Page("paginas/previsoes.py", title="Previsões", icon=":material/trending_up:", default=True),

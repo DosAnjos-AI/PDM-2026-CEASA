@@ -122,6 +122,19 @@ def historico(unique_id: str, cfg: dict) -> pd.DataFrame:
     return df[df["ds"] + pd.Timedelta(days=7) <= hoje]   # semana em andamento ainda não fechou
 
 
+def faixa_do_dia(unique_id: str, dia: date, cfg: dict) -> pd.Series | None:
+    """Menor e maior preço do boletim num dia (só na fonte silver, que guarda os dois)."""
+    if cfg["fonte"]["tipo"] != "silver_unificado":
+        return None
+    ceasa, produto, _ = f.dividir(unique_id)
+    df = _consultar(f"""
+        SELECT preco_minimo AS minimo, preco_maximo AS maximo
+        FROM `{PROJETO}.{cfg['fonte']['tabela']}`
+        WHERE ceasa = @ceasa AND produto_canonico = @produto AND data = @dia
+    """, ceasa=ceasa, produto=produto, dia=dia)
+    return None if df.empty else df.iloc[0]
+
+
 def produto_em_todas_as_ceasas(produto: str, desde: date, cfg: dict) -> pd.DataFrame:
     """Preço diário de um produto em todas as CEASAs (só na fonte silver, em R$/kg)."""
     return _consultar(f"""

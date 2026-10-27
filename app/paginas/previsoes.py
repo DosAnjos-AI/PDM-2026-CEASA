@@ -1,9 +1,13 @@
+from html import escape
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 import componentes
 import dados
+import destaques as d
+import estilo
 import formato as f
 
 st.title("Previsões de preço")
@@ -54,6 +58,15 @@ modelo_oficial = oficial["modelo"].iloc[0]
 hist = dados.historico(uid, cfg)
 base = hist.loc[hist["ds"] == ultima, "y"]
 ultimo_preco = float(base.iloc[0]) if not base.empty else float("nan")
+silver = cfg["fonte"]["tipo"] == "silver_unificado"
+unidade = "/kg" if silver else ""
+barato = "barata" if f.feminino(produto) else "barato"
+
+
+def variacao(valor: float) -> float:
+    """Variação em relação ao último preço (NaN se ele não existir)."""
+    return valor / ultimo_preco - 1 if pd.notna(ultimo_preco) and ultimo_preco > 0 else float("nan")
+
 
 if ultima < prev["ultima_semana"].max():
     st.warning(
@@ -61,33 +74,109 @@ if ultima < prev["ultima_semana"].max():
         "data. Elas se atualizam quando a CEASA voltar a ser carregada na silver."
     )
 
-# Data da previsão: qualquer data prevista pelo modelo oficial (até h_max à frente do último dado)
+# Cartão do preço atual, com os destaques do histórico em pílulas
+todas = dados.produto_em_todas_as_ceasas(produto, (ultima - pd.Timedelta(days=182)).date(), cfg) if silver else None
+faixa = dados.faixa_do_dia(uid, ultima.date(), cfg)
+extremos = d.extremos(hist, ultima)
+etiquetas = []
+tendencia = d.tendencia(hist, ultima)
+if tendencia is not None:
+    dica = "Média dos últimos 7 dias comparada com a de 3 meses antes"
+    if abs(tendencia) < 0.02:
+        etiquetas.append(estilo.etiqueta(f"estável no trimestre ({f.pct(tendencia)})", "estavel", dica=dica))
+    elif tendencia > 0:
+        etiquetas.append(estilo.etiqueta(f"em alta no trimestre ({f.pct(tendencia)})", "alta", "alta", dica))
+    else:
+        etiquetas.append(estilo.etiqueta(f"em queda no trimestre ({f.pct(tendencia)})", "queda", "queda", dica))
+if extremos:
+    etiquetas.append(estilo.etiqueta(f"pico {f.brl(extremos['pico'])} em {d.mes_ano(extremos['data_pico'])}",
+                                     "pico", dica="Maior preço dos últimos 2 anos"))
+    etiquetas.append(estilo.etiqueta(f"mínima {f.brl(extremos['minima'])} em {d.mes_ano(extremos['data_minima'])}",
+                                     "minima", dica="Menor preço dos últimos 2 anos"))
+    if extremos["variacao"] is not None:
+        etiquetas.append(estilo.etiqueta(f"variou {extremos['variacao']:.0%} em 2 anos", "variacao",
+                                         dica="Do menor ao maior preço dos últimos 2 anos"))
+comparacao = d.comparar_ceasas(todas, ceasa, ultima)
+if comparacao:
+    dica = "Preço comum no último dia com dado de cada CEASA (as atrasadas ficam de fora)"
+    if comparacao["diferenca"] > 0:
+        etiquetas.append(estilo.etiqueta(
+            f"{comparacao['diferenca']:.0%} mais {barato} em {comparacao['ceasa']} ({f.brl(comparacao['preco'])})",
+            "mapa", dica=dica))
+    else:
+        etiquetas.append(estilo.etiqueta(f"o menor preço entre {comparacao['n_ceasas']} CEASAs", "mapa", "queda", dica))
+mes = d.mes_mais_barato(hist, ultima)
+if mes:
+    etiquetas.append(estilo.etiqueta(f"costuma ficar mais {barato} em {d.MESES[mes - 1]}", "calendario",
+                                     dica="Últimos 5 anos completos, comparando cada mês com a média do próprio ano"))
+
+if faixa is not None and pd.notna(faixa["minimo"]) and pd.notna(faixa["maximo"]) and faixa["maximo"] > faixa["minimo"]:
+    frase = (f"No dia, a cotação foi de {estilo.negrito(f.brl(faixa['minimo']))} a "
+             f"{estilo.negrito(f.brl(faixa['maximo']) + unidade)}, do menor ao maior preço do boletim — "
+             "o valor acima é o mais comum.")
+else:
+    frase = "O valor acima é o preço mais comum do dia no boletim da CEASA."
+nota = "Preço de atacado na central de abastecimento."
+if extremos:
+    nota += f" Média de 2 anos: {f.brl(extremos['media'])}{unidade}."
+nota += f" Fonte: boletim da {f.CEASAS.get(ceasa, ceasa).split(' · ')[0]}."
+
+st.html(estilo.cartao(
+    titulo=f"Preço d{'a' if f.feminino(produto) else 'o'} <em>{escape(f.nome_produto(produto))}</em>",
+    subtitulo=f"{f.CEASAS.get(ceasa, ceasa)} · atacado",
+    rotulo="Preço atual", valor=f.brl(ultimo_preco), unidade=unidade, pilula=f"cotação de {f.data(ultima)}",
+    frase=frase, nota=escape(nota), etiquetas=etiquetas,
+))
+
+# Cartão da previsão: qualquer data prevista pelo modelo oficial (até h_max à frente do último dado)
+st.subheader("Para onde o preço vai")
 datas = list(oficial["ds"])
 horizonte_da_data = dict(zip(oficial["ds"], oficial["horizonte"]))
-padrao = next((d for d in datas if horizonte_da_data[d] == 7), datas[-1])
+padrao = next((dt for dt in datas if horizonte_da_data[dt] == 7), datas[-1])
 data_alvo = st.select_slider(
     "Data da previsão", options=datas, value=padrao,
-    format_func=lambda d: f"{d:%d/%m} (+{f.rotulo_horizonte(horizonte_da_data[d], cfg)})",
+    format_func=lambda dt: f"{dt:%d/%m} (+{f.rotulo_horizonte(horizonte_da_data[dt], cfg)})",
 )
 h_alvo = horizonte_da_data[data_alvo]
 previsto = float(oficial.loc[oficial["ds"] == data_alvo, "yhat"].iloc[0])
 real = hist.loc[hist["ds"] == data_alvo, "y"]
+mudanca = variacao(previsto)
 
-k1, k2, k3 = st.columns(3)
-k1.metric(f"Preço em {f.data(ultima)} (último dado)", f.brl(ultimo_preco))
-k2.metric(
-    f"Previsão oficial para {f.data(data_alvo)}", f.brl(previsto),
-    delta=f"{f.pct(previsto / ultimo_preco - 1)} em relação ao último dado" if ultimo_preco else None,
-    delta_color="off",
-)
-k3.metric("Modelo em produção", modelo_oficial, help=f.DESCRICAO_MODELO.get(modelo_oficial))
+resultado = ""
 if not real.empty:
     erro = previsto - float(real.iloc[0])
-    st.success(
-        f"Essa data já passou: o preço real em {f.data(data_alvo)} foi {f.brl(float(real.iloc[0]))}. "
-        f"A previsão errou por {f.brl(abs(erro))} ({'acima' if erro > 0 else 'abaixo'} do real)."
-    )
+    resultado = (f"Essa data já passou: o preço real foi {estilo.negrito(f.brl(float(real.iloc[0])) + unidade)}. "
+                 f"A previsão errou por {estilo.negrito(f.brl(abs(erro)))} ({'acima' if erro > 0 else 'abaixo'} do real).")
+metricas_serie = dados.metricas_serie(execucao["run_id"])
+erro_medio = metricas_serie.loc[(metricas_serie["unique_id"] == uid) & (metricas_serie["modelo"] == modelo_oficial),
+                                "mae"]
+etiquetas_horizonte = []
+for h in cfg["validacao"]["horizontes"]:
+    linha = oficial[oficial["horizonte"] == h]
+    if not linha.empty:
+        valor = float(linha["yhat"].iloc[0])
+        etiquetas_horizonte.append(estilo.etiqueta(
+            f"em {f.rotulo_horizonte(h, cfg)}: {f.brl(valor)} ({f.pct(variacao(valor))})", "relogio",
+            "escolhida" if h == h_alvo else "", f.dia_da_semana(linha["ds"].iloc[0]),
+        ))
 
+st.html(estilo.cartao(
+    rotulo=f"Previsão para {f.dia_da_semana(data_alvo)} · {f.rotulo_horizonte(h_alvo, cfg)} à frente",
+    valor=f.brl(previsto), unidade=unidade,
+    pilula=f"{f.pct(mudanca)} em relação ao último preço",
+    tom_pilula="" if pd.isna(mudanca) or abs(mudanca) < 0.005 else ("alta" if mudanca > 0 else "queda"),
+    frase=(f"Previsão do {estilo.negrito(modelo_oficial)}, o modelo em produção, feita com os dados até "
+           f"{f.data(ultima)}."),
+    nota=escape(
+        f"{modelo_oficial}: {f.DESCRICAO_MODELO.get(modelo_oficial, 'modelo do pipeline de MLOps')}."
+        + (f" Nos testes com o passado, ele errou em média {f.brl(float(erro_medio.iloc[0]))}{unidade} neste produto."
+           if not erro_medio.empty else "")
+    ),
+    resultado=resultado, etiquetas=etiquetas_horizonte,
+))
+
+# Gráfico: histórico real + previsão oficial + outros modelos, com a data escolhida destacada
+st.subheader("Histórico e previsão")
 disponiveis = sorted(outros["modelo"].unique())
 sugeridos = [m for m in ["Naive", "Chronos2_clima", "ARIMA", "Chronos2"] if m in disponiveis][:3]
 c1, c2 = st.columns([3, 2], vertical_alignment="bottom")
@@ -99,7 +188,6 @@ janelas = {"3 meses": 91, "6 meses": 182, "1 ano": 365, "2 anos": 730, "Tudo": N
 opcoes_janela = ["3 meses", "6 meses", "1 ano", "Tudo"] if f.diario(cfg) else ["6 meses", "1 ano", "2 anos", "Tudo"]
 janela = c2.segmented_control("Histórico no gráfico", opcoes_janela, default=opcoes_janela[1]) or opcoes_janela[1]
 
-# Gráfico: histórico real + previsão oficial + outros modelos, com a data escolhida destacada
 dias = janelas[janela]
 h = hist if dias is None else hist[hist["ds"] > ultima - pd.Timedelta(days=dias)]
 fig = go.Figure()
@@ -118,12 +206,14 @@ fig.add_scatter(
     x=[data_alvo], y=[previsto], name=f"Data escolhida ({f.data(data_alvo)})", mode="markers",
     marker=dict(size=16, color=f.FOLHA, line=dict(color="white", width=2), symbol="diamond"),
 )
-for x, texto, cor in [(ultima, "último dado", f.SUAVE), (data_alvo, "data escolhida", f.FOLHA)]:
+# Rótulos das linhas em alturas diferentes, para não se sobreporem quando as datas são próximas.
+for x, texto, cor, acima in [(ultima, "último dado", f.SUAVE, 0), (data_alvo, "data escolhida", f.FOLHA, 15)]:
     fig.add_shape(type="line", x0=x, x1=x, y0=0, y1=1, yref="paper", line=dict(color=cor, width=1, dash="dot"))
     fig.add_annotation(x=x, y=1, yref="paper", text=texto, showarrow=False, xanchor="right", yanchor="bottom",
-                       font=dict(size=11, color=cor))
+                       yshift=acima, font=dict(size=11, color=cor))
 fig.update_yaxes(tickprefix="R$ ", separatethousands=True)
 f.layout_grafico(fig, altura=460)
+fig.update_layout(margin_t=48)
 st.plotly_chart(fig, width="stretch")
 st.caption(
     f"Gráfico de {f.nome_produto(produto)} na {f.CEASAS.get(ceasa, ceasa)}. Linha cheia: preço real. Tracejado verde: "
@@ -131,22 +221,21 @@ st.caption(
     "outros modelos preveem."
 )
 
-# Tabela dos próximos dias
-tabela = p.pivot(index=["horizonte", "ds"], columns="modelo", values="yhat")
-colunas = [modelo_oficial, *[m for m in comparar if m != modelo_oficial]]
-tabela = tabela[colunas].rename(columns={modelo_oficial: f"{modelo_oficial} (oficial)"})
-tabela.index = [
-    f"{f.data(ds)} (+{f.rotulo_horizonte(hz, cfg)})" + ("  ◀ escolhida" if ds == data_alvo else "")
-    for hz, ds in tabela.index
-]
-st.subheader("Previsão dia a dia" if f.diario(cfg) else "Próximas semanas")
-st.dataframe(tabela.map(f.brl), width="stretch")
-st.caption("— = o modelo não prevê essa data (os LightGBM diretos só preveem 3, 7 e 14 dias à frente).")
+# Tabela dos próximos dias, recolhida para não pesar na página
+with st.expander("Ver a previsão dia a dia em tabela" if f.diario(cfg) else "Ver as próximas semanas em tabela"):
+    tabela = p.pivot(index=["horizonte", "ds"], columns="modelo", values="yhat")
+    colunas = [modelo_oficial, *[m for m in comparar if m != modelo_oficial]]
+    tabela = tabela[colunas].rename(columns={modelo_oficial: f"{modelo_oficial} (oficial)"})
+    tabela.index = [
+        f"{f.data(ds)} (+{f.rotulo_horizonte(hz, cfg)})" + ("  ◀ escolhida" if ds == data_alvo else "")
+        for hz, ds in tabela.index
+    ]
+    st.dataframe(tabela.map(f.brl), width="stretch")
+    st.caption("— = o modelo não prevê essa data (os LightGBM diretos só preveem 3, 7 e 14 dias à frente).")
 
 # Mesmo produto em todas as CEASAs (preço por kg é comparável)
-if cfg["fonte"]["tipo"] == "silver_unificado":
+if silver:
     st.subheader(f"{f.nome_produto(produto)} nas outras CEASAs")
-    todas = dados.produto_em_todas_as_ceasas(produto, (ultima - pd.Timedelta(days=182)).date(), cfg)
     prev_produto = prev[(prev["produto"] == produto) & prev["e_campeao"]]
     fig2 = go.Figure()
     for c in [c for c in f.CEASAS if c in set(todas["ceasa"])]:

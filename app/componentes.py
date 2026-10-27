@@ -24,7 +24,8 @@ def escolher_serie(ids: list[str], pagina: str) -> str:
         "CEASA", ceasas, default=padrao_ceasa if padrao_ceasa in ceasas else ceasas[0],
         format_func=lambda c: c, help=" · ".join(f.CEASAS[c] for c in ceasas), key=f"{pagina}_ceasa",
     ) or padrao_ceasa
-    produtos = sorted({p for c, p, _ in partes.values() if c == ceasa}, key=f.nome_produto)
+    # Ordena pelo nome sem acento (maca_fuji antes de mamao_formosa, como num dicionário).
+    produtos = sorted({p for c, p, _ in partes.values() if c == ceasa})
     padrao_produto = st.session_state.get("produto_escolhido", "tomate_longa_vida")
     produto = c1.selectbox(
         "Produto", produtos, index=produtos.index(padrao_produto) if padrao_produto in produtos else 0,

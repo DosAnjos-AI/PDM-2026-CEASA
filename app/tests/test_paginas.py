@@ -35,10 +35,28 @@ def test_pagina_abre_sem_erro(pagina):
     abrir(pagina)
 
 
-def test_previsoes_mostra_o_modelo_em_producao_e_a_data_escolhida():
-    metricas = {m.label: m.value for m in abrir("previsoes").metric}
-    assert metricas["Modelo em produção"] == "Chronos2"
-    assert any(rotulo.startswith("Previsão oficial para") for rotulo in metricas)
+def test_previsoes_mostra_os_cartoes_do_preco_atual_e_da_previsao():
+    cartoes = " ".join(h.value for h in abrir("previsoes").html)
+    assert "Preço do <em>Tomate longa vida</em>" in cartoes
+    assert "cotação de 19/10/2026" in cartoes
+    assert "do menor ao maior preço do boletim" in cartoes
+    assert "Previsão para segunda, 26/10/2026 · 7 dias à frente" in cartoes
+    assert "<strong>Chronos2</strong>, o modelo em produção" in cartoes
+    assert "errou em média R$" in cartoes
+
+
+def test_previsoes_mostra_os_destaques_do_historico():
+    cartoes = " ".join(h.value for h in abrir("previsoes").html)
+    assert "no trimestre" in cartoes and "pico R$" in cartoes and "mínima R$" in cartoes and "em 2 anos" in cartoes
+    for horizonte in ("em 3 dias", "em 7 dias", "em 14 dias"):
+        assert horizonte in cartoes
+
+
+def test_previsoes_compara_a_ceasa_atrasada_com_as_outras_na_mesma_data():
+    at = abrir("previsoes", ceasa_escolhida="MS", produto_escolhido="tomate_longa_vida")
+    cartoes = " ".join(h.value for h in at.html)
+    assert "Preço do <em>Tomate longa vida</em>" in cartoes and "cotação de 02/10/2026" in cartoes
+    assert "mais barato em GO" in cartoes or "o menor preço entre 2 CEASAs" in cartoes
 
 
 def test_previsoes_diz_que_veio_da_atualizacao_pelo_pubsub():

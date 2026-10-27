@@ -85,8 +85,50 @@ def com_partes(df: pd.DataFrame) -> pd.DataFrame:
     return df.assign(ceasa=partes.str[0], produto=partes.str[1])
 
 
+# Nome com acento de cada produto da silver e o artigo dele ("preço da batata", "preço do tomate").
+PRODUTOS = {
+    "abobrinha_italiana": ("Abobrinha italiana", "a"),
+    "banana_maca": ("Banana maçã", "a"),
+    "batata_inglesa": ("Batata inglesa", "a"),
+    "batata_lisa": ("Batata lisa", "a"),
+    "berinjela": ("Berinjela", "a"),
+    "beterraba": ("Beterraba", "a"),
+    "cenoura": ("Cenoura", "a"),
+    "chuchu": ("Chuchu", "o"),
+    "coco_seco": ("Coco seco", "o"),
+    "coco_verde": ("Coco verde", "o"),
+    "laranja_pera": ("Laranja pera", "a"),
+    "limao_taiti": ("Limão Taiti", "o"),
+    "maca_fuji": ("Maçã Fuji", "a"),
+    "maca_gala": ("Maçã Gala", "a"),
+    "mamao_formosa": ("Mamão formosa", "o"),
+    "maracuja_azedo": ("Maracujá azedo", "o"),
+    "melancia": ("Melancia", "a"),
+    "milho_verde": ("Milho verde", "o"),
+    "morango": ("Morango", "o"),
+    "pimentao_verde": ("Pimentão verde", "o"),
+    "quiabo": ("Quiabo", "o"),
+    "repolho_roxo": ("Repolho roxo", "o"),
+    "repolho_verde": ("Repolho verde", "o"),
+    "tomate_longa_vida": ("Tomate longa vida", "o"),
+    "uva_italia": ("Uva Itália", "a"),
+}
+
+DIAS_DA_SEMANA = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
+
+
 def nome_produto(produto: str) -> str:
-    return produto.replace("_", " ").capitalize()
+    """tomate_longa_vida -> Tomate longa vida (produtos fora da lista: sem acento)."""
+    return PRODUTOS.get(produto, (produto.replace("_", " ").capitalize(), "o"))[0]
+
+
+def feminino(produto: str) -> bool:
+    return PRODUTOS.get(produto, ("", "o"))[1] == "a"
+
+
+def dia_da_semana(valor) -> str:
+    """2026-11-02 -> segunda, 02/11/2026"""
+    return f"{DIAS_DA_SEMANA[pd.Timestamp(valor).dayofweek]}, {data(valor)}"
 
 
 def nome_serie(unique_id: str) -> str:

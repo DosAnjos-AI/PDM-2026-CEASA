@@ -123,6 +123,10 @@ def consultar(sql: str, **params) -> pd.DataFrame:
     if "producao" in s:
         return PRODUCAO
     if "ceasa_unificado" in s:
+        if "preco_minimo" in s:
+            serie = HIST[(HIST["ceasa"] == params["ceasa"]) & (HIST["produto"] == params["produto"])
+                         & (HIST["ds"] == pd.Timestamp(params["dia"]))]
+            return pd.DataFrame({"minimo": serie["y"] * 0.9, "maximo": serie["y"] * 1.25})
         if "@ceasa" in s:
             serie = HIST[(HIST["ceasa"] == params["ceasa"]) & (HIST["produto"] == params["produto"])]
             return serie[["ds", "y"]]

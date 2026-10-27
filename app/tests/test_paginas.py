@@ -1,6 +1,7 @@
 """Abre cada página como o Streamlit faria, com o BigQuery trocado por respostas sintéticas."""
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -43,6 +44,26 @@ def test_previsoes_mostra_o_modelo_em_producao_e_a_data_escolhida():
 def test_previsoes_diz_que_veio_da_atualizacao_pelo_pubsub():
     legendas = " ".join(c.value for c in abrir("previsoes").caption)
     assert "atualização disparada pelo Pub/Sub" in legendas
+
+
+def test_previsoes_mostra_a_verificacao_sem_dado_novo_no_fim_de_semana():
+    legendas = " ".join(c.value for c in abrir("previsoes").caption)
+    assert ("Última verificação: 24/10/2026 16:35, sem dado novo na silver (no fim de semana a coleta não roda)"
+            in legendas)
+
+
+def test_previsoes_avisa_quando_a_ultima_verificacao_falhou(monkeypatch):
+    monkeypatch.setattr(bigquery_falso, "ULTIMA_VERIFICACAO", bigquery_falso.ULTIMA_VERIFICACAO.assign(status="falhou"))
+    assert any("falhou" in aviso.value for aviso in abrir("previsoes").warning)
+
+
+def test_previsoes_nao_repete_a_verificacao_que_gerou_as_previsoes(monkeypatch):
+    # A inferência que gerou as previsões começou antes de gravá-las: a legenda principal já basta.
+    anterior = bigquery_falso.ULTIMA_VERIFICACAO.assign(inicio=pd.Timestamp("2026-10-21 14:55", tz="UTC"),
+                                                         status="sucesso")
+    monkeypatch.setattr(bigquery_falso, "ULTIMA_VERIFICACAO", anterior)
+    legendas = " ".join(c.value for c in abrir("previsoes").caption)
+    assert "Última verificação" not in legendas
 
 
 def test_app_principal_abre_e_o_botao_atualizar_funciona():

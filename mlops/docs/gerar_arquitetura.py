@@ -54,7 +54,7 @@ texto(0.6, 7.95, "CEASAs de GO, MG, ES, SC e MS  ·  Google Cloud  ·  roda sozi
 caixa(0.6, 5.45, 2.7, 1.75, CEU_CLARA, CEU)
 etiqueta(0.85, 7.0, "Cloud Scheduler", CEU)
 texto(0.85, 6.6, "Despertador", tam=15, peso="bold")
-texto(0.85, 6.15, "Toda terça às 16:00\nmanda o job rodar", tam=11.5, cor=SUAVE)
+texto(0.85, 6.15, "Toda terça às 17:00\nmanda o job rodar", tam=11.5, cor=SUAVE)
 
 # 2. Dados
 caixa(0.6, 1.5, 2.7, 3.45, FOLHA_CLARA, FOLHA)

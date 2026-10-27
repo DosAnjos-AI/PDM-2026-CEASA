@@ -40,10 +40,11 @@ imagem = Path(__file__).resolve().parent.parent / "assets" / "arquitetura.png"
 if imagem.exists():
     st.image(str(imagem), width="stretch")
 st.info(
-    "**Treino semanal:** o agendador dispara a avaliação completa dos modelos toda terça-feira às 16:00.  \n"
-    "**Inferência diária:** sempre que a `silver.ceasa_unificado` é regravada, um coletor de logs publica um "
-    "aviso no tópico do Pub/Sub `ceasa-dados-atualizados`; o Eventarc chama um Workflow, que roda só a previsão "
-    "com o modelo em produção. Se os dados não mudaram, o job encerra em cerca de 1 minuto."
+    "**Treino semanal:** o agendador dispara a avaliação completa dos modelos toda terça-feira às 17:00, "
+    "depois da atualização diária da silver.  \n"
+    "**Inferência diária:** sempre que a `silver.ceasa_unificado` é regravada (todo dia às 16:30), um coletor de "
+    "logs publica um aviso no tópico do Pub/Sub `ceasa-dados-atualizados`; o Eventarc chama um Workflow, que roda "
+    "só a previsão com o modelo em produção. Se os dados não mudaram, o job encerra em cerca de 1 minuto."
 )
 
 # Decisões do champion–challenger

@@ -26,6 +26,23 @@ st.caption(
     f"({origem})"
 )
 
+# A inferência diária roda a cada regravação da silver. Sem dado novo (no fim de semana a coleta não
+# roda), as previsões não mudam; a legenda mostra que a verificação aconteceu mesmo assim.
+verificacao = dados.ultima_verificacao()
+if verificacao is not None and f.hora_local(verificacao["inicio"]) > f.hora_local(prev["gerado_em"].max()):
+    quando = f.hora_local(verificacao["inicio"])
+    if verificacao["status"] == "falhou":
+        st.warning(
+            f"A última verificação de dados novos, em {f.data_hora_local(quando)}, falhou. As previsões abaixo "
+            "são da última execução que deu certo."
+        )
+    elif verificacao["status"] == "sem_dados_novos":
+        motivo = " (no fim de semana a coleta não roda)" if quando.dayofweek >= 5 else ""
+        st.caption(
+            f"Última verificação: {f.data_hora_local(quando)}, sem dado novo na silver{motivo}, então as "
+            "previsões continuam as mesmas."
+        )
+
 uid = componentes.escolher_serie(sorted(prev["unique_id"].unique()), "previsoes")
 ceasa, produto, _ = f.dividir(uid)
 p = prev[prev["unique_id"] == uid].sort_values("ds")

@@ -6,7 +6,7 @@ série (champion–challenger), publica as previsões de **3, 7 e 14 dias** à f
 no dataset `mlops` do BigQuery. A aplicação que mostra os resultados está em [../app](../app).
 
 ```
-Cloud Scheduler (toda terça 16:00, America/Sao_Paulo, depois da ingestão de segunda)
+Cloud Scheduler (toda terça 17:00, America/Sao_Paulo, depois da atualização diária da silver)
   └─> Cloud Run Job "treino-precos"
         1. Lê silver.ceasa_unificado: preço por kg e clima do estado de cada CEASA
         2. Dados iguais aos da última execução?  -> registra "sem_dados_novos" e encerra
@@ -102,9 +102,11 @@ Rodar agora, sem esperar o agendamento:
 gcloud scheduler jobs run treino-precos-semanal --location us-central1 --project pdm-ceasa
 ```
 
-O agendamento roda na terça porque o job de ingestão do grupo (`ciclo-ceasa`) atualiza os dados
-em dias úteis às 14:00, com o dado do dia anterior; na terça à tarde a silver já tem a segunda-feira.
-Se a ingestão atrasar, dispare o comando acima na mão.
+O agendamento roda na terça às 17:00, depois da cadeia diária do grupo: a coleta (`ciclo-ceasa`)
+roda em dias úteis às 14:00, e o job `atualizar-prata-ouro-diario` recria a silver às 16:30, o que
+já dispara a inferência diária (pronta por volta das 16:35). Assim o treino usa o dado do próprio
+dia e não termina junto com a inferência: os dois gravam previsões, e a aplicação mostra as mais
+recentes. Se a ingestão atrasar, dispare o comando acima na mão.
 
 Forçar o treino mesmo sem dados novos (por exemplo, depois de mudar o `treino.yaml`):
 
@@ -139,7 +141,7 @@ O treino completo (13 modelos, walk-forward, decisão do campeão) roda toda ter
 outro, as previsões são refeitas **sempre que chega dado novo**, com o modelo em produção:
 
 ```
-a silver.ceasa_unificado é regravada (na mão ou por um job)
+a silver.ceasa_unificado é regravada (todo dia às 16:30, pelo job atualizar-prata-ouro-diario do grupo)
   └─► o log de auditoria do BigQuery registra a gravação
         └─► o coletor de logs mlops-silver-unificada-atualizada publica no tópico ceasa-dados-atualizados
               └─► Eventarc chama o Workflow inferencia-diaria
@@ -148,8 +150,11 @@ a silver.ceasa_unificado é regravada (na mão ou por um job)
 ```
 
 Quem publica o aviso é o próprio Google Cloud (o coletor de logs filtra, no log de auditoria, as
-gravações bem-sucedidas da `silver.ceasa_unificado`). Por isso **a ingestão não precisa mudar nada**:
-funciona com a montagem feita na mão hoje e vai funcionar quando ela for automatizada.
+gravações bem-sucedidas da `silver.ceasa_unificado`). Por isso **a ingestão não precisou mudar nada**:
+o aviso funcionava com a montagem feita na mão e continua funcionando com o job
+`atualizar-prata-ouro-diario`, que recria a silver todo dia às 16:30 desde 23/10/2026. No fim de
+semana a coleta não roda: a silver é recriada com os mesmos dados, a inferência encerra como
+`sem_dados_novos` e a aplicação mostra a hora dessa verificação.
 
 - `pipeline.prever` usa a versão em produção (ou `campeao.modelo_fixo`) e os hiperparâmetros do último
   treino. Se os dados não mudaram desde a última previsão publicada, encerra sem fazer nada.
@@ -245,7 +250,7 @@ gcloud run jobs deploy treino-precos --source . --region us-central1 --project p
 | Recurso | Nome |
 |---|---|
 | Cloud Run Job | `treino-precos` (us-central1, 8 vCPU, 16 GiB, timeout 3h) |
-| Cloud Scheduler | `treino-precos-semanal` (`0 16 * * 2`, America/Sao_Paulo) |
+| Cloud Scheduler | `treino-precos-semanal` (`0 17 * * 2`, America/Sao_Paulo) |
 | Pub/Sub | tópico `ceasa-dados-atualizados` e fila de erros `ceasa-dados-atualizados-dlq` (+ assinatura `-dlq-sub`) |
 | Eventarc + Workflows | gatilho e workflow `inferencia-diaria`, com a conta `inferencia-diaria` |
 | Cloud Logging | coletor `mlops-silver-unificada-atualizada` (log de auditoria do BigQuery → tópico) |

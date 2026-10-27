@@ -82,6 +82,8 @@ EXECUCOES = pd.DataFrame([
      "versao_codigo": "teste", "ultima_semana": FIM, "series_usadas": 4, "decisao": None, "erro": None,
      "experimento": None, "tipo": "inferencia", "segundos_cobrados": 120, "custo_usd": 0.03},
 ])
+# Última inferência diária: num sábado, depois das previsões publicadas, sem dado novo.
+ULTIMA_VERIFICACAO = pd.DataFrame([{"inicio": pd.Timestamp("2026-10-24 19:35", tz="UTC"), "status": "sem_dados_novos"}])
 VERSOES = pd.DataFrame([{
     "versao_id": RUN, "criado_em": pd.Timestamp("2026-10-21 15:24", tz="UTC"), "n_series": 4,
     "modelos_usados": json.dumps({"Chronos2": 4}), "mae_holdout_candidata": 0.48, "campeao_anterior": "naive",
@@ -106,6 +108,8 @@ def consultar(sql: str, **params) -> pd.DataFrame:
         return METRICAS
     if "execucoes" in s and "@run_id" in s:
         return pd.DataFrame({"tipo": ["inferencia"]})   # previsões atuais vieram da inferência diária
+    if "execucoes" in s and "tipo = 'inferencia'" in s:
+        return ULTIMA_VERIFICACAO
     if "custo_execucoes" in s:
         return EXECUCOES
     if "execucoes" in s:

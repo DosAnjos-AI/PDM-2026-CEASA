@@ -126,13 +126,18 @@ def data(valor) -> str:
     return "—" if pd.isna(valor) else pd.Timestamp(valor).strftime("%d/%m/%Y")
 
 
+def hora_local(valor) -> pd.Timestamp:
+    """Timestamp do BigQuery (UTC) no horário de Brasília."""
+    ts = pd.Timestamp(valor)
+    ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts
+    return ts.tz_convert("America/Sao_Paulo")
+
+
 def data_hora_local(valor) -> str:
     """Timestamps do BigQuery vêm em UTC; mostra no horário de Brasília."""
     if pd.isna(valor):
         return "—"
-    ts = pd.Timestamp(valor)
-    ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts
-    return ts.tz_convert("America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
+    return hora_local(valor).strftime("%d/%m/%Y %H:%M")
 
 
 def layout_grafico(fig, altura: int = 440):

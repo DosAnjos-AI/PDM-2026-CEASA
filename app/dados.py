@@ -78,6 +78,17 @@ def tipo_da_execucao(run_id: str) -> str:
     return df.iloc[0]["tipo"] if not df.empty else "desconhecido"
 
 
+def ultima_verificacao() -> pd.Series | None:
+    """Última inferência diária (início e status), tenha ela achado dado novo ou não."""
+    df = _consultar(f"""
+        SELECT inicio, status
+        FROM {MLOPS}.execucoes
+        WHERE tipo = 'inferencia' AND experimento IS NULL
+        ORDER BY inicio DESC LIMIT 1
+    """)
+    return None if df.empty else df.iloc[0]
+
+
 def producao_atual() -> str:
     df = _consultar(f"SELECT versao_id FROM {MLOPS}.producao_atual")
     return "naive" if df.empty else df.iloc[0]["versao_id"]

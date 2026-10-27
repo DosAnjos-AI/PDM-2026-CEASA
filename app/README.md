@@ -16,7 +16,9 @@ No ar em: https://app-precos-502988692211.us-central1.run.app
 As previsões mostradas são sempre as mais recentes em `mlops.previsoes`: quando a inferência diária
 (Pub/Sub) publica previsões novas, elas aparecem em até 10 minutos (o tempo de cache das consultas),
 ou na hora com o botão **Atualizar dados** da barra lateral. A página de previsões diz se elas vieram
-da atualização diária ou do treino semanal.
+da atualização diária ou do treino semanal. Quando a última verificação diária não achou dado novo
+(no fim de semana a coleta não roda), a página mostra a hora dela; se a verificação falhou, mostra
+um aviso.
 
 A aplicação lê a configuração gravada pela última execução de produção e se adapta a ela: com a
 configuração atual mostra o preço diário por kg das 5 CEASAs; com execuções antigas (até a v0.4)

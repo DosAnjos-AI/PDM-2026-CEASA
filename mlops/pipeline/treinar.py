@@ -106,7 +106,7 @@ def main() -> None:
             return
 
         precisa_clima = any(cfg["modelos"][m].get("clima") for m in modelos.ativos(cfg))
-        clima = dados.preparar_clima(cliente, cfg, df, clima_bruto) if precisa_clima else None
+        clima = dados.preparar_clima(cliente, cfg, df, clima_bruto, hoje) if precisa_clima else None
 
         # 1. Avaliação walk-forward de todos os modelos
         prev, tempos, hiperparametros = avaliacao.walk_forward(df, clima, cfg)
@@ -138,8 +138,8 @@ def main() -> None:
             else:
                 versao_prod, atribuicao_prod = versao_atual, atribuicao_atual
 
-            # 3. Previsão dos próximos períodos com todos os modelos (o campeão fica marcado)
-            futuras = previsao.gerar(df, clima, cfg, atribuicao_prod, hiperparametros)
+            # 3. Previsão dos próximos períodos com os modelos publicados (o campeão fica marcado)
+            futuras = previsao.gerar(df, clima, cfg, atribuicao_prod, hiperparametros, hoje)
             execucao["decisao"] = decisao["decisao"]
 
         execucao["status"] = "sucesso"

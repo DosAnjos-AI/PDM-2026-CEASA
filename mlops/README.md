@@ -11,10 +11,10 @@ Cloud Scheduler (toda terça 17:00, America/Sao_Paulo, depois da atualização d
         1. Lê silver.ceasa_unificado: preço por kg e clima do estado de cada CEASA
         2. Dados iguais aos da última execução?  -> registra "sem_dados_novos" e encerra
         3. Otimiza o LightGBM com Optuna (só com dados anteriores ao walk-forward)
-        4. Walk-forward: 13 modelos x 13 cortes x 3, 7 e 14 dias à frente
+        4. Walk-forward: 8 modelos x 13 cortes x 3, 7 e 14 dias à frente
         5. Monta a versão candidata: o melhor modelo de cada série nos cortes de seleção
         6. Compara candidata x campeão atual nos cortes de holdout -> promove ou rejeita
-        7. Prevê 3, 7 e 14 dias à frente com todos os modelos e marca o campeão em produção
+        7. Prevê os próximos 14 dias com o Naive e os dois Chronos e marca o campeão em produção
         8. Grava execução, métricas, versão, decisão e previsões no BigQuery
 ```
 
@@ -42,16 +42,23 @@ artigo em [docs/artigo.html](docs/artigo.html).
 
 | Família | Modelos | Biblioteca |
 |---|---|---|
-| Baselines | `Naive` (último preço), `SeasonalNaive` (1 ano antes) | statsforecast |
+| Baseline | `Naive` (último preço) (`SeasonalNaive` desativado) | statsforecast |
 | Estatísticos (um por série) | `ARIMA`, `ETS`, `Theta` (`SARIMA` desativado) | statsforecast |
-| ML (um modelo global) | `LightGBM`, `LightGBM_direto`, `LightGBM_clima`, `LightGBM_otimizado`, `Ridge` | mlforecast |
-| Foundation models (zero-shot) | `Chronos2`, `Chronos2_clima`, `ChronosBolt` (`ChronosT5` desativado) | chronos-forecasting |
+| ML (um modelo global) | `LightGBM`, `LightGBM_otimizado` (`LightGBM_direto`, `LightGBM_clima` e `Ridge` desativados) | mlforecast |
+| Foundation models (zero-shot) | `Chronos2`, `Chronos2_clima` (`ChronosBolt` e `ChronosT5` desativados) | chronos-forecasting |
+
+- **Desativados em nov/2026:** os modelos que ganharam do Naive em 2 ou menos dos 13 cortes do
+  treino de 03/11: `SeasonalNaive` (nenhum corte; erra 3,5 vezes mais que o Naive), `LightGBM_clima`
+  (1), `LightGBM_direto`, `Ridge` e `ChronosBolt` (2 cada).
+- **Previsões publicadas:** só o `Naive`, o `Chronos2` e o `Chronos2_clima` (`inferencia.modelos` no
+  yaml), os únicos que não erraram mais que o Naive no geral nesse treino. Os outros ativos entram só
+  no walk-forward. O modelo em produção de cada série publica sempre, mesmo fora da lista.
 
 - **Janela de histórico:** o ARIMA e os Chronos usam os **últimos 5 anos** de cada série; ETS,
   Theta e os modelos de ML usam **3 anos**. A escolha veio de experimentos com janelas de 2, 3, 4, 5
   e 10 anos (`--janela-anos`): Chronos e ARIMA melhoraram até 4–5 anos e depois estabilizaram; o
   Theta piorou com mais histórico; o LightGBM não mudou.
-- Os LightGBM diretos treinam um modelo para cada horizonte avaliado (3, 7 e 14 dias).
+- O `LightGBM_otimizado` é direto: treina um modelo para cada horizonte avaliado (3, 7 e 14 dias).
 - Os modelos de ML são globais: aprendem com as 5 CEASAs ao mesmo tempo.
 
 Ative, desative ou ajuste os modelos em [config/treino.yaml](config/treino.yaml).
@@ -74,6 +81,12 @@ Ative, desative ou ajuste os modelos em [config/treino.yaml](config/treino.yaml)
   `fixada`, com o desempenho dele contra o Naive no holdout. Sem essa linha, vale a escolha automática.
 - **Previsões publicadas:** cada um dos próximos 14 dias (`horizontes_previsao`), para a aplicação
   deixar escolher a data. A avaliação continua em 3, 7 e 14 dias.
+- **CEASA atrasada:** as previsões publicadas começam sempre hoje. Se o último dado de uma série é
+  anterior a ontem (a MS parou em 02/10), o modelo prevê também os dias que faltam até hoje e
+  publica só os 14 a partir de hoje; o `horizonte` continua contado do último dado (na MS, em 04/11,
+  de 33 a 46 dias). Esses horizontes longos não passam pelo walk-forward. Acima de
+  `inferencia.atraso_maximo` (90 dias) a série deixa de ser publicada. As séries atualizadas são
+  previstas numa chamada separada, então não mudam por causa das atrasadas.
 
 ## Tabelas (`pdm-ceasa.mlops`)
 
@@ -87,7 +100,7 @@ Ative, desative ou ajuste os modelos em [config/treino.yaml](config/treino.yaml)
 | `versao_series` | Modelo escolhido para cada série em cada versão |
 | `producao` | Histórico de promoções e rollbacks |
 | `producao_atual` (view) | Versão em produção agora |
-| `previsoes` | Previsões futuras de todos os modelos; `e_campeao` marca o modelo em produção em cada série |
+| `previsoes` | Previsões futuras dos modelos publicados; `e_campeao` marca o modelo em produção em cada série |
 | `previsoes_atuais` (view) | Previsões da execução mais recente (usada pela aplicação) |
 | `custo_execucoes` (view) | Custo estimado de cada execução no Cloud Run |
 
@@ -137,7 +150,7 @@ tiver dados novos, ou na hora com `--forcar`.
 
 ## Inferência diária (Pub/Sub)
 
-O treino completo (13 modelos, walk-forward, decisão do campeão) roda toda terça. Entre um treino e
+O treino completo (8 modelos, walk-forward, decisão do campeão) roda toda terça. Entre um treino e
 outro, as previsões são refeitas **sempre que chega dado novo**, com o modelo em produção:
 
 ```
@@ -157,7 +170,8 @@ semana a coleta não roda: a silver é recriada com os mesmos dados, a inferênc
 `sem_dados_novos` e a aplicação mostra a hora dessa verificação.
 
 - `pipeline.prever` usa a versão em produção (ou `campeao.modelo_fixo`) e os hiperparâmetros do último
-  treino. Se os dados não mudaram desde a última previsão publicada, encerra sem fazer nada.
+  treino, e roda só os modelos publicados (Naive, Chronos2 e Chronos2_clima). Se os dados não mudaram
+  desde a última previsão publicada, encerra sem fazer nada.
 - Mensagens que falharem 5 vezes vão para o tópico `ceasa-dados-atualizados-dlq` e ficam guardadas
   na assinatura `ceasa-dados-atualizados-dlq-sub`.
 - A infraestrutura (tópico, fila de erros, Workflow, gatilho e permissões) é criada por
@@ -242,7 +256,7 @@ Deploy de uma nova versão do código (o Cloud Build monta a imagem a partir do 
 gcloud run jobs deploy treino-precos --source . --region us-central1 --project pdm-ceasa `
   --service-account airflow-mlops@pdm-ceasa.iam.gserviceaccount.com `
   --cpu 8 --memory 16Gi --task-timeout 3h --max-retries 0 `
-  --set-env-vars VERSAO_CODIGO=v0.7,N_JOBS=8
+  --set-env-vars VERSAO_CODIGO=v0.9,N_JOBS=8
 ```
 
 ## Infraestrutura criada

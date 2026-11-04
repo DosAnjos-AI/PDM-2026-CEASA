@@ -30,6 +30,8 @@ def test_config_coerente(caminho):
     fixo = cfg.get("campeao", {}).get("modelo_fixo")
     if fixo:
         assert fixo in ativos
+    inferencia = cfg.get("inferencia", {}).get("modelos", ativos)
+    assert set(inferencia) <= set(ativos), "inferencia.modelos só pode ter modelos ativos"
     for nome in ativos:
         modelos.criar(nome, cfg)   # monta sem erro (o Chronos só carrega os pesos em abrir())
 

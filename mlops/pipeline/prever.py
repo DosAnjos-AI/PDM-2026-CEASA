@@ -6,8 +6,9 @@ Disparada pelo Pub/Sub quando a ingestão termina (ver infra/inferencia_diaria.s
     python -m pipeline.prever --sem-gravar     # teste: não grava nada
 
 Usa a versão em produção registrada pelo último treino (ou campeao.modelo_fixo) e os
-hiperparâmetros encontrados nele (ex.: os do Optuna). Gera as previsões de todos os modelos ativos,
-como o treino, para a aplicação continuar comparando-os; o campeão fica marcado em e_campeao.
+hiperparâmetros encontrados nele (ex.: os do Optuna). Gera as previsões dos mesmos modelos que o
+treino publica (inferencia.modelos, mais o Naive e o campeão), para a aplicação compará-los; o
+campeão fica marcado em e_campeao.
 """
 import argparse
 import json
@@ -88,10 +89,12 @@ def main() -> None:
         versao, registrada = registro.campeao_atual() if registro else (campeao.VERSAO_NAIVE, {})
         atribuicao = atribuicao_de_producao(cfg, df["unique_id"].unique(), registrada)
         hiperparametros = registro.hiperparametros_do_ultimo_treino() if registro else {}
-        precisa_clima = any(cfg["modelos"][m].get("clima") for m in modelos.ativos(cfg))
-        clima = dados.preparar_clima(cliente, cfg, df, clima_bruto) if precisa_clima else None
+        nomes = previsao.publicados(cfg, atribuicao)
+        execucao["modelos"] = ",".join(nomes)
+        precisa_clima = any(cfg["modelos"][m].get("clima") for m in nomes)
+        clima = dados.preparar_clima(cliente, cfg, df, clima_bruto, hoje) if precisa_clima else None
 
-        futuras = previsao.gerar(df, clima, cfg, atribuicao, hiperparametros)
+        futuras = previsao.gerar(df, clima, cfg, atribuicao, hiperparametros, hoje)
         log.info("Previsões: %d linhas, %d séries, dados até %s, versão em produção %s",
                  len(futuras), futuras["unique_id"].nunique(), resumo["ultima_data"], versao)
         execucao.update(status="sucesso", hiperparametros=json.dumps(hiperparametros))

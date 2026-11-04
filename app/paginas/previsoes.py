@@ -19,7 +19,8 @@ if execucao is None or prev.empty:
     st.stop()
 
 cfg = dados.config_da_execucao(execucao)
-h_max = int(prev["horizonte"].max())
+# As séries de CEASA atrasada vão além (cobrem também os dias até hoje); a legenda usa as atualizadas.
+h_max = int(prev.loc[prev["ultima_semana"] == prev["ultima_semana"].max(), "horizonte"].max())
 origem = {
     "inferencia": "atualização disparada pelo Pub/Sub quando a silver recebe dado novo",
     "treino": "treino semanal",
@@ -54,6 +55,10 @@ ultima = pd.Timestamp(p["ultima_semana"].iloc[0])
 oficial = p[p["e_campeao"]].sort_values("ds")
 outros = p[~p["e_campeao"]]
 modelo_oficial = oficial["modelo"].iloc[0]
+# Numa CEASA atrasada o horizonte conta a partir do último dado dela, e a previsão publicada começa
+# hoje (ver pipeline/previsao.py): desloc é quantos períodos a mais do que numa série atualizada.
+publicados = cfg["validacao"].get("horizontes_previsao") or cfg["validacao"]["horizontes"]
+desloc = int(oficial["horizonte"].min()) - min(publicados)
 
 hist = dados.historico(uid, cfg)
 base = hist.loc[hist["ds"] == ultima, "y"]
@@ -68,7 +73,15 @@ def variacao(valor: float) -> float:
     return valor / ultimo_preco - 1 if pd.notna(ultimo_preco) and ultimo_preco > 0 else float("nan")
 
 
-if ultima < prev["ultima_semana"].max():
+if ultima < prev["ultima_semana"].max() and desloc > 0:
+    st.warning(
+        f"Os dados da {f.CEASAS.get(ceasa, ceasa)} vão só até {f.data(ultima)}. Para mostrar os próximos dias, os "
+        f"modelos preveem a partir dessa data: de {f.rotulo_horizonte(int(oficial['horizonte'].min()), cfg)} a "
+        f"{f.rotulo_horizonte(int(oficial['horizonte'].max()), cfg)} à frente, além dos "
+        f"{f.rotulo_horizonte(max(cfg['validacao']['horizontes']), cfg)} em que eles foram testados, então "
+        "valem só como referência. Elas se atualizam quando a CEASA voltar a ser carregada na silver."
+    )
+elif ultima < prev["ultima_semana"].max():
     st.warning(
         f"Os dados da {f.CEASAS.get(ceasa, ceasa)} vão só até {f.data(ultima)}, então as previsões partem dessa "
         "data. Elas se atualizam quando a CEASA voltar a ser carregada na silver."
@@ -132,7 +145,7 @@ st.html(estilo.cartao(
 st.subheader("Para onde o preço vai")
 datas = list(oficial["ds"])
 horizonte_da_data = dict(zip(oficial["ds"], oficial["horizonte"]))
-padrao = next((dt for dt in datas if horizonte_da_data[dt] == 7), datas[-1])
+padrao = next((dt for dt in datas if horizonte_da_data[dt] == 7 + desloc), datas[-1])
 data_alvo = st.select_slider(
     "Data da previsão", options=datas, value=padrao,
     format_func=lambda dt: f"{dt:%d/%m} (+{f.rotulo_horizonte(horizonte_da_data[dt], cfg)})",
@@ -151,7 +164,7 @@ metricas_serie = dados.metricas_serie(execucao["run_id"])
 erro_medio = metricas_serie.loc[(metricas_serie["unique_id"] == uid) & (metricas_serie["modelo"] == modelo_oficial),
                                 "mae"]
 etiquetas_horizonte = []
-for h in cfg["validacao"]["horizontes"]:
+for h in [x + desloc for x in cfg["validacao"]["horizontes"]]:
     linha = oficial[oficial["horizonte"] == h]
     if not linha.empty:
         valor = float(linha["yhat"].iloc[0])
@@ -231,7 +244,8 @@ with st.expander("Ver a previsão dia a dia em tabela" if f.diario(cfg) else "Ve
         for hz, ds in tabela.index
     ]
     st.dataframe(tabela.map(f.brl), width="stretch")
-    st.caption("— = o modelo não prevê essa data (os LightGBM diretos só preveem 3, 7 e 14 dias à frente).")
+    if tabela.isna().any().any():
+        st.caption("— = o modelo não prevê essa data (os LightGBM diretos só preveem 3, 7 e 14 dias à frente).")
 
 # Mesmo produto em todas as CEASAs (preço por kg é comparável)
 if silver:
@@ -252,14 +266,16 @@ if silver:
     st.plotly_chart(fig2, width="stretch")
     st.caption("Preço por kg nos últimos 6 meses em cada CEASA; o tracejado é a previsão oficial de cada uma.")
 
-# Maiores variações previstas entre todas as séries, no mesmo horizonte da data escolhida
-st.subheader(f"Maiores variações previstas em {f.rotulo_horizonte(h_alvo, cfg)}")
+# Maiores variações previstas entre todas as séries, no mesmo horizonte da data escolhida. O horizonte
+# é o de uma série atualizada, então as CEASAs atrasadas (horizontes bem maiores) ficam de fora.
+h_rank = h_alvo - desloc
+st.subheader(f"Maiores variações previstas em {f.rotulo_horizonte(h_rank, cfg)}")
 opcoes_rank = ["Oficial", *[m for m in sugeridos if m != modelo_oficial]]
 # Com o Naive em produção a previsão oficial é sempre "sem variação"; abre no melhor modelo alternativo.
 padrao_rank = opcoes_rank[1] if modelo_oficial == "Naive" and len(opcoes_rank) > 1 else "Oficial"
 modelo_rank = st.segmented_control("Segundo o modelo", opcoes_rank, default=padrao_rank) or "Oficial"
 
-alvo = prev[prev["horizonte"] == h_alvo]
+alvo = prev[prev["horizonte"] == h_rank]
 alvo = alvo[alvo["e_campeao"]] if modelo_rank == "Oficial" else alvo[alvo["modelo"] == modelo_rank]
 var = alvo.merge(dados.ultimos_precos(prev, cfg), on="unique_id")
 var["variacao"] = var["yhat"] / var["y"] - 1
@@ -268,7 +284,7 @@ var = var.rename(columns={"ceasa": "CEASA", "y": "Preço atual", "yhat": "Previs
 var = var[["Produto", "CEASA", "Preço atual", "Previsto", "variacao"]]
 
 if var.empty:
-    st.info(f"O modelo {modelo_rank} não prevê {f.rotulo_horizonte(h_alvo, cfg)} à frente. Escolha outra data ou outro modelo.")
+    st.info(f"O modelo {modelo_rank} não prevê {f.rotulo_horizonte(h_rank, cfg)} à frente. Escolha outra data ou outro modelo.")
 elif var["variacao"].abs().max() < 1e-9:
     st.info(
         f"O modelo {modelo_rank if modelo_rank != 'Oficial' else modelo_oficial} repete o último preço: ele não "

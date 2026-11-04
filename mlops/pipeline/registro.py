@@ -62,7 +62,8 @@ DESCRICOES = {
     "versoes": "Registry: cada execução gera uma versão candidata (modelo por série) e a decisão de promoção.",
     "versao_series": "Modelo escolhido para cada série em cada versão.",
     "producao": "Histórico de promoções e rollbacks. A linha mais recente é a versão em produção.",
-    "previsoes": "Previsões das próximas semanas de todos os modelos; e_campeao marca o modelo em produção "
+    "previsoes": "Previsões dos próximos períodos dos modelos publicados (inferencia.modelos da config, mais o "
+                 "Naive e o campeão); e_campeao marca o modelo em produção "
                  "(nulo em execuções antigas, que só gravavam o campeão).",
 }
 

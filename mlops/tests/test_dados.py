@@ -32,6 +32,22 @@ def test_verificar_atraso_desligado_sem_limite_na_config(series, cfg):
     assert dados.verificar_atraso(series, cfg, date(2026, 10, 21)) == {}
 
 
+def test_periodos_de_atraso_so_cresce_na_serie_atrasada(cfg):
+    ultimo = pd.Series({"GO__hoje": FIM, "GO__ontem": FIM - pd.Timedelta(days=1), "MS__tomate": FIM_MS})
+    extra = dados.periodos_de_atraso(ultimo, FIM.date(), cfg)
+    # Dado de hoje ou de ontem: a previsão já começa amanhã ou hoje. MS, parada em 02/10: prevê 16 dias a
+    # mais (03/10 a 18/10, a véspera de hoje) para que os 14 publicados comecem hoje, 19/10.
+    assert extra.to_dict() == {"GO__hoje": 0, "GO__ontem": 0, "MS__tomate": 16}
+    assert dados.periodos_de_atraso(ultimo, None, cfg).eq(0).all()
+
+
+def test_periodos_de_atraso_na_fonte_semanal(cfg):
+    cfg["fonte"]["frequencia"] = "W-MON"
+    # Quarta-feira: a última semana fechada começa na segunda de 9 dias antes; 3 semanas antes, atrasada.
+    ultimo = pd.Series({"em_dia": pd.Timestamp("2026-10-26"), "atrasada": pd.Timestamp("2026-10-05")})
+    assert dados.periodos_de_atraso(ultimo, date(2026, 11, 4), cfg).to_dict() == {"em_dia": 0, "atrasada": 3}
+
+
 def _clima_bruto(df: pd.DataFrame) -> pd.DataFrame:
     """Clima com valor = número do dia, para saber exatamente de que data veio cada valor."""
     base = pd.Timestamp("2020-01-01")
@@ -54,6 +70,18 @@ def test_clima_cobre_os_dias_previstos_de_cada_serie(selecionadas, cfg):
     fim_clima = clima.groupby("unique_id")["ds"].max()
     fim_serie = selecionadas.groupby("unique_id")["ds"].max()
     assert (fim_clima == fim_serie + pd.Timedelta(days=14)).all()
+
+
+def test_clima_da_serie_atrasada_chega_aos_14_dias_a_partir_de_hoje(selecionadas, cfg):
+    hoje = FIM + pd.Timedelta(days=1)
+    clima = dados.preparar_clima(None, cfg, selecionadas, _clima_bruto(selecionadas), hoje.date())
+    fim_clima = clima.groupby("unique_id")["ds"].max()
+    assert fim_clima["GO__tomate"] == FIM + pd.Timedelta(days=14)          # atualizada: igual a antes
+    assert fim_clima["MS__tomate"] == hoje + pd.Timedelta(days=13)         # atrasada: hoje + 13 dias
+    ms = clima[clima["unique_id"] == "MS__tomate"].set_index("ds")["temp_media_60d_l14"]
+    # Sem clima depois do último dado da MS, os dias seguintes repetem o último valor conhecido.
+    assert (ms[ms.index > FIM_MS + pd.Timedelta(days=14)] == ms[FIM_MS + pd.Timedelta(days=14)]).all()
+    assert not clima.isna().any().any()
 
 
 def test_clima_exige_defasagem_maior_ou_igual_ao_horizonte(selecionadas, cfg):

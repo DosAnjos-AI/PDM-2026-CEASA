@@ -102,6 +102,20 @@ def verificar_atraso(df: pd.DataFrame, cfg: dict, hoje: date) -> dict[str, int]:
     return atrasadas
 
 
+def periodos_de_atraso(ultimo: pd.Series, hoje: date | None, cfg: dict) -> pd.Series:
+    """Períodos que cada série precisa prever a mais para que a previsão publicada comece hoje.
+
+    `ultimo` é a última data de cada série (índice = unique_id). Série com dado de ontem ou de
+    hoje: 0, a previsão já começa hoje ou amanhã. Série de CEASA atrasada (ex.: MS parada em
+    02/10, hoje 04/11): 32, ou seja, prevê 32 + 14 dias a partir do último dado para publicar os
+    14 que começam hoje. Sem `hoje`, 0 para todas.
+    """
+    if hoje is None:
+        return pd.Series(0, index=ultimo.index, dtype=int)
+    atraso = (pd.Timestamp(hoje) - ultimo) // passo(cfg)
+    return (atraso - 1).clip(lower=0).astype(int)
+
+
 def selecionar_series(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
     """Mantém as séries ainda cotadas, cortadas no último trecho sem buracos.
 
@@ -138,11 +152,13 @@ def selecionar_series(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
 
 
 def preparar_clima(cliente: bigquery.Client, cfg: dict, df: pd.DataFrame,
-                   clima_bruto: pd.DataFrame | None) -> pd.DataFrame:
+                   clima_bruto: pd.DataFrame | None, hoje: date | None = None) -> pd.DataFrame:
     """Clima por série já defasado: a linha (série, ds) traz o clima de ds - defasagem.
 
     Cobre o histórico de cada série e os períodos futuros a prever, de modo que tanto o treino
-    quanto a previsão só usem clima já conhecido no dia da previsão.
+    quanto a previsão só usem clima já conhecido no dia da previsão. Com `hoje`, a série de CEASA
+    atrasada ganha também os períodos até hoje (ver periodos_de_atraso); como a silver só traz
+    clima nos dias com preço, depois do último dado dela o clima repete o último valor conhecido.
     """
     ccfg, d, val = cfg["clima"], passo(cfg), cfg["validacao"]
     defasagem = ccfg["defasagem"]
@@ -159,11 +175,13 @@ def preparar_clima(cliente: bigquery.Client, cfg: dict, df: pd.DataFrame,
     colunas = [c for c in clima_bruto.columns if c not in ("unique_id", "ds")]
 
     limites = df.groupby("unique_id")["ds"].agg(["min", "max"])
+    extra = periodos_de_atraso(limites["max"], hoje, cfg)
     partes = []
     for uid, g in clima_bruto[clima_bruto["unique_id"].isin(limites.index)].groupby("unique_id"):
         serie = g.set_index("ds")[colunas].sort_index()
         serie.index = serie.index + defasagem * d   # o valor do dia t passa para a linha t + defasagem
-        grade = pd.date_range(limites.at[uid, "min"], limites.at[uid, "max"] + h * d, freq=cfg["fonte"]["frequencia"])
+        fim = limites.at[uid, "max"] + (h + int(extra[uid])) * d
+        grade = pd.date_range(limites.at[uid, "min"], fim, freq=cfg["fonte"]["frequencia"])
         # Dias ainda sem medição repetem o último valor; o começo do histórico repete o primeiro.
         serie = serie.reindex(serie.index.union(grade)).ffill().bfill().reindex(grade)
         partes.append(serie.rename_axis("ds").reset_index().assign(unique_id=uid))

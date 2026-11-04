@@ -70,9 +70,9 @@ texto(4.45, 6.75, "Job de treino (toda terça-feira)", tam=15, peso="bold")
 
 passos = [
     ("Tem dado novo?", "Se não tiver, encerra em poucos segundos."),
-    ("Treina e testa 13 modelos", "Naive, ARIMA, LightGBM, Chronos…\nsimulando 13 rodadas no passado (walk-forward)."),
+    ("Treina e testa 8 modelos", "Naive, ARIMA, LightGBM, Chronos…\nsimulando 13 rodadas no passado (walk-forward)."),
     ("Escolhe o campeão", "Só troca o modelo em produção se ele acertar mais\nem dias que não foram usados na escolha (holdout)."),
-    ("Prevê 3, 7 e 14 dias à frente", "Com todos os modelos, para as 120 séries (CEASA × produto)."),
+    ("Prevê os próximos 14 dias", "Com o Naive e os dois Chronos, para as 120 séries (CEASA × produto)."),
 ]
 y = 6.15
 for i, (titulo, desc) in enumerate(passos, start=1):

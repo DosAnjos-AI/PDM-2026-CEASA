@@ -1,0 +1,232 @@
+# Workflow verificar-e-atualizar-prata-ouro (us-central1).
+# Decide pelo ESTADO da cadeia (consulta de defasagem), nao pelo carimbo de
+# um evento: qualquer disparo -- manual, agendado ou por evento -- chega a
+# mesma decisao, e um disparo perdido e corrigido pelo seguinte.
+#
+# Ordem:
+#   1. roda sql/consultas/silver/25_defasagem_cadeia_check.sql e le o resumo;
+#   2. sem linha de resumo -> falha (consulta quebrada nunca e "em dia");
+#   3. execucao em curso do job novo ou do plano B -> sai (duas reconstrucoes
+#      simultaneas da mesma tabela nao sao aceitaveis);
+#   4. zero atrasos -> sai com "nada a fazer";
+#   5. senao, chama atualizar-prata-ouro-evento so com os estados atrasados.
+#      Unificado/ouro atrasado sem estado atrasado -> falha: o job exige ao
+#      menos um estado, e o plano B das 16:30 corrige.
+# Toda saida registra o motivo; toda falha registra ERROR antes do raise,
+# para o alerta da etapa 0 ver.
+#
+# O texto da consulta NAO vive aqui: __SQL_DEFASAGEM__ e substituido pelo
+# conteudo do arquivo .sql no deploy (pipelines/implantar_verificador.sh),
+# para o repositorio ter uma fonte so.
+main:
+  params: [evento]
+  steps:
+    - configurar:
+        assign:
+          - projeto: "pdm-ceasa"
+          - regiao: "us-central1"
+          - job_novo: "atualizar-prata-ouro-evento"
+          - job_plano_b: "atualizar-prata-ouro-diario"
+          - estados_aceitos: ["go", "sc", "ms", "mg", "es"]
+          - sql_defasagem: __SQL_DEFASAGEM__
+          # ordem de colunas que este Workflow sabe ler; outra ordem = falha
+          - colunas_esperadas: ["regra", "tabela_atrasada", "atrasada_modificada_brt", "referencia", "referencia_modificada_brt", "atrasos_estado", "atrasos_unificado", "atrasos_gold"]
+
+    - ler_defasagem:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${projeto}
+          body:
+            query: ${sql_defasagem}
+            useLegacySql: false
+            timeoutMs: 120000
+        result: consulta
+
+    - conferir_consulta:
+        switch:
+          - condition: ${not(consulta.jobComplete)}
+            steps:
+              - falhar_incompleta:
+                  call: falhar
+                  args:
+                    motivo: "consulta de defasagem nao completou no tempo limite"
+                    detalhe: ${consulta.jobReference}
+
+    - conferir_colunas:
+        assign:
+          - colunas: []
+    - juntar_colunas:
+        for:
+          value: campo
+          in: ${consulta.schema.fields}
+          steps:
+            - acrescentar_coluna:
+                assign:
+                  - colunas: ${list.concat(colunas, campo.name)}
+    - validar_colunas:
+        switch:
+          - condition: ${json.encode_to_string(colunas) != json.encode_to_string(colunas_esperadas)}
+            steps:
+              - falhar_colunas:
+                  call: falhar
+                  args:
+                    motivo: "colunas da consulta de defasagem diferentes das esperadas"
+                    detalhe: ${colunas}
+
+    - ler_linhas:
+        assign:
+          - linhas: ${default(map.get(consulta, "rows"), [])}
+          - resumo: null
+          - estados: []
+          - outras_regras: 0
+    - separar_linhas:
+        for:
+          value: linha
+          in: ${linhas}
+          steps:
+            - classificar:
+                switch:
+                  - condition: ${linha.f[0].v == "resumo"}
+                    assign:
+                      - resumo:
+                          estado: ${int(linha.f[5].v)}
+                          unificado: ${int(linha.f[6].v)}
+                          gold: ${int(linha.f[7].v)}
+                  - condition: ${linha.f[0].v == "estado"}
+                    assign:
+                      - estados: ${list.concat(estados, text.replace_all(linha.f[1].v, "silver.ceasa_", ""))}
+                  - condition: true
+                    assign:
+                      - outras_regras: ${outras_regras + 1}
+
+    - exigir_resumo:
+        switch:
+          - condition: ${resumo == null}
+            steps:
+              - falhar_sem_resumo:
+                  call: falhar
+                  args:
+                    motivo: "linha de resumo ausente na consulta de defasagem; ausencia e consulta quebrada, nunca 'em dia'"
+                    detalhe: ${len(linhas)}
+
+    - checar_em_curso:
+        for:
+          value: job
+          in: ["${job_novo}", "${job_plano_b}"]
+          steps:
+            - listar_execucoes:
+                call: googleapis.run.v2.projects.locations.jobs.executions.list
+                args:
+                  parent: ${"projects/" + projeto + "/locations/" + regiao + "/jobs/" + job}
+                  pageSize: 20
+                result: execucoes
+            - examinar:
+                for:
+                  value: execucao
+                  in: ${default(map.get(execucoes, "executions"), [])}
+                  steps:
+                    - em_curso:
+                        switch:
+                          - condition: ${not("completionTime" in execucao)}
+                            steps:
+                              - logar_em_curso:
+                                  call: sys.log
+                                  args:
+                                    severity: INFO
+                                    json:
+                                      decisao: "saiu"
+                                      motivo: "execucao em curso; nao disputar a reconstrucao"
+                                      job: ${job}
+                                      execucao: ${execucao.name}
+                                      resumo: ${resumo}
+                              - sair_em_curso:
+                                  return: "saiu: execucao em curso"
+
+    - checar_nada_a_fazer:
+        switch:
+          - condition: ${resumo.estado + resumo.unificado + resumo.gold == 0}
+            steps:
+              - logar_nada:
+                  call: sys.log
+                  args:
+                    severity: INFO
+                    json:
+                      decisao: "nada a fazer"
+                      motivo: "resumo da defasagem com zero atrasos"
+                      resumo: ${resumo}
+              - sair_nada:
+                  return: "nada a fazer"
+
+    - validar_estados:
+        for:
+          value: uf
+          in: ${estados}
+          steps:
+            - na_lista:
+                switch:
+                  - condition: ${not(uf in estados_aceitos)}
+                    steps:
+                      - falhar_estado:
+                          call: falhar
+                          args:
+                            motivo: "estado fora da lista fechada"
+                            detalhe: ${uf}
+    - conferir_contagem:
+        switch:
+          - condition: ${len(estados) != resumo.estado}
+            steps:
+              - falhar_contagem:
+                  call: falhar
+                  args:
+                    motivo: "linhas de estado divergem da contagem do resumo"
+                    detalhe: ${resumo}
+          - condition: ${len(estados) == 0}
+            steps:
+              - falhar_sem_estado:
+                  call: falhar
+                  args:
+                    motivo: "unificado ou ouro atrasado sem estado atrasado; o job exige ao menos um estado e o plano B das 16:30 corrige"
+                    detalhe: ${resumo}
+
+    - rodar_job:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: ${"projects/" + projeto + "/locations/" + regiao + "/jobs/" + job_novo}
+          body:
+            overrides:
+              containerOverrides:
+                - args: ${estados}
+          connector_params:
+            skip_polling: true
+        result: operacao
+    - logar_rodou:
+        call: sys.log
+        args:
+          severity: INFO
+          json:
+            decisao: "rodou"
+            motivo: "estados atrasados na defasagem"
+            estados: ${estados}
+            resumo: ${resumo}
+            execucao: ${operacao.metadata.name}
+    - fim:
+        return:
+          decisao: "rodou"
+          estados: ${estados}
+
+# Registra ERROR (o alerta ve) e interrompe a execucao com o motivo.
+falhar:
+  params: [motivo, detalhe]
+  steps:
+    - logar_erro:
+        call: sys.log
+        args:
+          severity: ERROR
+          json:
+            decisao: "falhou"
+            motivo: ${motivo}
+            detalhe: ${detalhe}
+    - interromper:
+        raise:
+          motivo: ${motivo}
+          detalhe: ${detalhe}

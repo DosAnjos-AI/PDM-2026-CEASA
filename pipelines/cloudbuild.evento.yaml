@@ -1,0 +1,10 @@
+# Build da imagem atualizar-prata-ouro-evento com contexto na raiz do repositorio.
+# Uso (a partir da raiz): gcloud builds submit . --config pipelines/cloudbuild.evento.yaml --region us-central1 --project pdm-ceasa
+# Nome de imagem proprio: nao sobrescreve atualizar-prata-ouro-diario (plano B).
+# O que sobe no upload e controlado pelo .gcloudignore da raiz (so pipelines/ e sql/).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "pipelines/Dockerfile.evento", "-t", "${_IMAGEM}", "."]
+images: ["${_IMAGEM}"]
+substitutions:
+  _IMAGEM: us-central1-docker.pkg.dev/pdm-ceasa/cloud-run-source-deploy/atualizar-prata-ouro-evento:latest

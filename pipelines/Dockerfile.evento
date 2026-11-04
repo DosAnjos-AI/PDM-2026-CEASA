@@ -1,0 +1,18 @@
+# Imagem do Cloud Run Job atualizar-prata-ouro-evento (pipelines/atualizar_prata_ouro_estados.sh).
+# Arquivo separado do pipelines/Dockerfile do plano B de proposito: construir
+# esta imagem nunca reconstroi nem altera a imagem das 16:30.
+# Contexto de build = raiz do repositorio (precisa de sql/, incluindo a
+# consulta de defasagem 25_); ver pipelines/cloudbuild.evento.yaml.
+# Mesma base do plano B (gcloud + bq + python3); no Cloud Run o bq usa a
+# conta de servico do job.
+FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:589.0.0-slim
+
+WORKDIR /app
+COPY sql/ sql/
+COPY pipelines/atualizar_prata_ouro_estados.sh pipelines/
+
+# saida sem buffer: cada linha de log chega ao Cloud Logging na hora
+ENV PYTHONUNBUFFERED=1
+# ENTRYPOINT sem argumentos: os estados vem de cada execucao (--args). Sem
+# padrao, uma execucao sem estado aborta em vez de reconstruir a coisa errada.
+ENTRYPOINT ["bash", "pipelines/atualizar_prata_ouro_estados.sh"]

@@ -59,11 +59,18 @@ sql/
     gold/         conferência da Gold, avaliação, GLOBAL_EXPLAIN e inferência
     metricas/     previsões para o recorte de demo e conferência da tabela consolidada
 ingestao/
+  ceasa_scraper.py      coletor da CEASA-GO (PDFs do site)
+  ceasa_extrair.py      extrator da CEASA-GO (PDF -> CSV, com OCR)
+  scraping/             coletor + extrator de MS, SC, MG e ES, um por sede
   upload_historico.sh   sobe o CSV histórico para o bucket (GCS, não BigQuery)
 scripts/
   metricas_demo*.py     calcula o bloco de métricas de demo em Python (lê o recorte local)
 docs/
+  ingestao/             como rodar: projeto GCP, Cloud Run Job, Scheduler e execução manual
+  coleta/               os sites, formatos e cuidados de cada CEASA
   bronze/, modelos/     documentação técnica de referência
+entrypoint.sh           o ciclo de ingestão inteiro (coleta, extração, upload e BigQuery)
+Dockerfile              imagem do ciclo, executada como Cloud Run Job
 ```
 
 ## O que faz cada arquivo
@@ -73,6 +80,10 @@ docs/
 | Arquivo | O que faz |
 |---|---|
 | `01_bronze.sql` | `LOAD DATA OVERWRITE` de `pdm-ceasa.bronze.cotacoes` a partir de `gs://pdm-ceasa-dados/raw/*.csv`. 17 colunas, todas nullable; `codigo` fica STRING para preservar zero à esquerda; preços e pesos ficam NUMERIC. Sem tolerância a linha inválida. |
+| `02_ceasa_go.sql` a `06_ceasa_es.sql` | Uma tabela por sede (`bronze.ceasa_go`, `_ms`, `_sc`, `_mg`, `_es`): carrega o CSV da sede em `bronze.stg_ceasa_<uf>`, compara a impressão digital (hash) de cada boletim com a da tabela e aplica um `MERGE` só nos boletins novos ou alterados. Cria a tabela se não existir. |
+| `07_manifesto_brutos.sql` | `LOAD DATA OVERWRITE` de `bronze.manifesto_brutos`: a lista de todo arquivo bruto do bucket, para a conferência de duas vias. |
+
+Todos recebem o bucket por parâmetro (`--parameter='bucket:STRING:gs://<bucket>'`).
 
 ### `sql/construir_tabelas/silver/`
 
@@ -141,6 +152,8 @@ docs/
 | `02_inferencia_regressao_linear.sql` | `ML.PREDICT` do modelo baseline linear para um (produto, classe, data) parametrizável |
 | `03_inferencia_regressao_arvore.sql` | Idem para o modelo baseline de árvore |
 | `04_inferencia_serie_arima.sql` | `ML.FORECAST` do ARIMA baseline (horizon=4, replicado explicitamente) |
+| `05_ceasa_check.sql` | Conferência das tabelas por sede: tamanho e nulos, prova do `MERGE` e conferência de duas vias entre o bucket e o BigQuery |
+| `06_boletins_carregados.sql` | Lista os boletins já presentes em cada `bronze.ceasa_<uf>`; usada pelo `entrypoint.sh` para extrair só o que falta |
 
 ### `sql/consultas/silver/`
 
@@ -197,22 +210,43 @@ docs/
 
 | Arquivo | O que faz |
 |---|---|
+| `entrypoint.sh` | O ciclo de ingestão: coleta e extrai as cinco sedes, envia os CSVs e o manifesto ao bucket e roda `sql/construir_tabelas/` (Bronze, Silver e Gold). Idempotente; configurado por variáveis de ambiente (ver `docs/ingestao/ingestao.md`) |
+| `Dockerfile` | Imagem do ciclo (`google/cloud-sdk:slim` + poppler, tesseract e as bibliotecas Python), executada como Cloud Run Job |
+| `ingestao/ceasa_scraper.py`, `ingestao/ceasa_extrair.py` | Coletor e extrator da CEASA-GO (PDF, 5 layouts, OCR) |
+| `ingestao/scraping/ceasa_<uf>.py` | Coletor + extrator de MS, SC, MG e ES; `comum.py` e `scriptcase.py` são módulos de apoio |
 | `ingestao/upload_historico.sh` | Sobe o CSV histórico local para `gs://pdm-ceasa-dados/raw/`; idempotente; caminho de origem via `ARQUIVO_ORIGEM` (env) com default relativo ao repositório |
 | `scripts/metricas_demo.py` | Roda `02_previsoes_demo.sql`, lê o recorte local, casa previsão×observado, calcula MAE/MSE/RMSE e grava via `UPDATE` nas 6 linhas bronze/silver de `comparacao_modelos` |
 | `scripts/metricas_demo_gold.py` | Mesma lógica para as 6 linhas gold, casando pela convenção de período (semana/mês contém a data) |
 
 ## Como executar
 
+**O passo a passo completo está em [`docs/ingestao/ingestao.md`](docs/ingestao/ingestao.md)**,
+com cada etapa pelo console do GCP e pelo Cloud Shell: preparar o projeto
+(APIs, bucket, datasets), construir a imagem, criar o Cloud Run Job, fazer a
+carga inicial, conferir, agendar no Cloud Scheduler e rodar sem o Cloud Run.
+
+Resumo:
+
+| Etapa | Como roda | Frequência |
+|---|---|---|
+| Ingestão das cinco CEASAs + Bronze, Silver e Gold | Cloud Run Job `ciclo-ceasa` (`entrypoint.sh`), disparado pelo Cloud Scheduler | todo dia útil |
+| CSV histórico da GO (2010 em diante) | `ingestao/upload_historico.sh`, à mão | uma vez |
+| Treino dos modelos e métricas | `sql/modelo/` e `sql/construir_tabelas/metricas/`, à mão | só com intenção de retreinar |
+
 Todo `.sql` roda via CLI a partir da raiz do repositório:
 
 ```bash
-bq query --use_legacy_sql=false < caminho/do/arquivo.sql
+bq query --project_id=pdm-ceasa --use_legacy_sql=false < caminho/do/arquivo.sql
 ```
 
-Ordem de execução do pipeline:
+Os da Bronze (`sql/construir_tabelas/bronze/`) recebem também o bucket:
+`--parameter='bucket:STRING:gs://pdm-ceasa-dados'`.
 
-1. `ingestao/upload_historico.sh` — sobe o CSV para o bucket
-2. `sql/construir_tabelas/bronze/01_bronze.sql`
+Ordem de execução do pipeline (os passos 2 a 4 são o que o `entrypoint.sh`
+faz a cada execução, depois da coleta):
+
+1. `ingestao/upload_historico.sh` — sobe o CSV histórico para o bucket (uma vez)
+2. `sql/construir_tabelas/bronze/01_*.sql` a `07_*.sql`, em ordem numérica
 3. `sql/construir_tabelas/silver/01_*.sql` a `08_*.sql`, em ordem numérica
 4. `sql/construir_tabelas/gold/01_*.sql` a `05_*.sql`, em ordem numérica
 5. `sql/modelo/bronze/01_*.sql` a `05_*.sql`, em ordem

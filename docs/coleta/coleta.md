@@ -1,7 +1,13 @@
 # Coleta — do site da CEASA-GO ao CSV histórico
 
-Etapa anterior à Bronze: os dois scripts de `ingestao/` produzem o CSV que
-`ingestao/upload_historico.sh` envia para `gs://pdm-ceasa-dados/raw/`.
+Etapa anterior à Bronze: os dois scripts de `ingestao/` produzem o CSV da GO
+que o `entrypoint.sh` envia para `gs://pdm-ceasa-dados/raw/cotacoes_site.csv`.
+O `ingestao/upload_historico.sh` envia outro arquivo, o CSV histórico, para o
+mesmo prefixo.
+
+Este documento descreve as fontes e os scripts de coleta. Para rodar o ciclo
+inteiro no GCP (Cloud Run Job e Cloud Scheduler) ou à mão, ver
+[`docs/ingestao/ingestao.md`](../ingestao/ingestao.md).
 
 | Script | O que faz |
 |---|---|
@@ -181,6 +187,11 @@ python3 ingestao/scraping/<script>.py --so-extrair   # refaz o CSV sem acessar o
 Saídas vão para a raiz do repositório, ou para a pasta em `CEASA_DADOS` se a
 variável estiver definida. Nada disso é versionado (`.gitignore`: `*.csv`,
 `cotacoes_*/`).
+
+No ciclo diário, o `entrypoint.sh` chama cada script com `--bruto` (a pasta
+persistente da sede), `--saida` (o CSV), `--meses-recentes` e `--carregados`
+(a lista do que já está na Bronze, para extrair só o que falta). Ver
+[`docs/ingestao/ingestao.md`](../ingestao/ingestao.md).
 
 Volume de uma carga completa, com o padrão `--delay 0.5`: MG ~4,5 mil
 requisições, ES ~3 mil, SC ~1,5 mil PDFs, MS ~70. Consultas sem dado (MG, ES)
